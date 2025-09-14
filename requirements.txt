@@ -1,4 +1,20 @@
-openai, 
-pandas, 
-langchain, 
-numpy
+# 取得・スクレイピング
+requests~=2.32
+beautifulsoup4~=4.12
+lxml~=5.3
+
+# 文書処理
+pypdf~=4.2
+pdfminer.six~=20231228
+unstructured~=0.15
+
+# ベクタDB/埋め込み/RAG
+faiss-cpu~=1.8
+chromadb~=0.5
+sentence-transformers~=3.0
+langchain~=0.2
+langchain-openai~=0.1
+
+# ルータ/小規模API化（社内用GUIや簡易APIを作るとき）
+fastapi~=0.115
+uvicorn[standard]~=0.30
