@@ -11,3 +11,7 @@ langchain~=0.2
 langchain-openai~=0.1
 fastapi~=0.115
 uvicorn[standard]~=0.30
+openai
+python-dotenv
+pandas
+openpyxl
