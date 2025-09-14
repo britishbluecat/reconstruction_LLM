@@ -1,5 +1,5 @@
 # デフォルト・ライブラリ
-import openai, pandas, langchain, pandas, numpy
+import openai, pandas, langchain, numpy
 
 """
 dummy.py
