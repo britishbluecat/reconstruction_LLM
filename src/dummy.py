@@ -1,6 +1,3 @@
-# デフォルト・ライブラリ
-import openai, pandas, langchain, numpy
-
 """
 dummy.py
 建築業者向けLLMアシスタントの雛形モジュール。
