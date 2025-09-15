@@ -3466,6 +3466,60 @@ pull 出しますか？
 もしよければ、こちらの requirements.txt / requirements-dev.txt 文面で PR用差分を作る前提で進めます。
 ほかに入れたいライブラリ（例：tenacity のリトライ、loguru のログ）などがあれば言ってください。
 
+あなた:
+chatgpt_log を作成しました。chatgptのキャッチアップができるようにすれば良いと思います。
+ChatGPT:
+なるほど 👍
+chatgpt_log をリポジトリに作って「ChatGPT とのやり取りや設計経緯をキャッチアップできる」ようにするのはとても良いやり方です。
+
+エンジニアリング的に言うと プロジェクトのナレッジベース / 開発日誌 の役割ですね。
+
+📂 推奨構成
+chatgpt_log/
+ ├── 20250915_storage_update.md
+ ├── 20250916_scraper_fix.md
+ ├── README.md
+1ファイル1トピック：大きな修正や相談ごとごとに Markdown ファイルを作る
+
+日付プレフィックス：YYYYMMDD_トピック.md で、後から追いやすい
+
+README.md：全体の目次的な役割（「どんな議論があったか」をリンク付きでまとめる）
+
+📝 ログのテンプレート例
+# 日付: 2025-09-15
+# トピック: storage.py の修正（url非空のみ・7列固定・prefix付きファイル名）
+
+## Context
+- スクレイプしたCSVに不要列が多く、`url` が空行も残っていた。
+- 不動産屋がExcelで開くことを前提に、BOM付きUTF-8に統一したい。
+
+## 決定事項
+- 保存列は `url, fetched_at, status, location, station_walk, built_ym, exclusive_area_sqm, layout, price_jpy` の7つのみ。
+- `url` が空なら保存しない。
+- ファイル名は `YYYYMMDDhhmm-suumo_reviews.csv` で保存。
+- 文字コードは BOM付きUTF-8 (`utf-8-sig`)。
+
+## 変更ファイル
+- `src/storage.py`
+
+## 今後のTODO
+- 駅名も抽出できるようにするか検討。
+- バルコニー面積や総戸数など、追加で欲しいカラムがあれば順次拡張。
+✅ 運用イメージ
+ChatGPT とやり取り → 合意したことを chatgpt_log/日付ファイル.md に転記
+
+1〜2行の「決定事項」だけでもOK（将来見返したときに、なぜこうしたのか分かる）
+
+Pull Request テンプレート代わりにもできる（PR時にログファイルを添付）
+
+👉 神崎さんに確認ですが、
+
+chatgpt_log は純粋にドキュメント用途にしたいですか？
+（＝コードに import したりしない）
+
+それとも コードからも参照できる形（例：logger が chatgpt_log に追記する）にしたいですか？
+
+
 
 
 選択されていません選択されていません
