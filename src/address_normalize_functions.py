@@ -210,6 +210,63 @@ def normalize_layout(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+import re
+import pandas as pd
+
+WARD_CITY_RE = re.compile(r"^東京都(?P<ward_city>.+?(?:区|市|村))(?P<rest>.*)")
+
+def add_ward_city_and_city_town(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    if "location" not in df.columns:
+        df["ward_city"] = None
+        df["city_town"] = None
+        return df
+
+    def extract_parts(loc: str):
+        ward_city = None
+        city_town = None
+        if not isinstance(loc, str):
+            return ward_city, city_town
+
+        text = loc.strip()
+        m = WARD_CITY_RE.match(text)
+        if not m:
+            return ward_city, city_town
+
+        ward_city = m.group("ward_city")
+        rest = (m.group("rest") or "").strip()
+
+        # --- city_town 抽出 ---
+        # 1. 「〇〇町」で始まる場合
+        m_town = re.match(r"^([^\d\s\-－（(　]+?町)", rest)
+        if m_town:
+            name = m_town.group(1)
+            if not ("ヶ" in name and name.endswith("ヶ谷")):
+                city_town = name
+            return ward_city, city_town
+
+        # 2. 「〇〇丁目」など → 「〇〇」を取る
+        m_chome = re.match(r"^([^\d\s\-－（(　]+?)丁目", rest)
+        if m_chome:
+            name = m_chome.group(1)
+            if not ("ヶ" in name and name.endswith("ヶ谷")):
+                city_town = name
+            return ward_city, city_town
+
+        # 3. 数字に続く前の漢字ブロックを取る（八丁堀4, 四谷5 など）
+        m_block = re.match(r"^([^\d\s\-－（(　]+)", rest)
+        if m_block:
+            name = m_block.group(1)
+            if not ("ヶ" in name and name.endswith("ヶ谷")):
+                city_town = name
+            return ward_city, city_town
+
+        return ward_city, city_town
+
+    pairs = df["location"].astype(str).map(extract_parts)
+    df[["ward_city", "city_town"]] = pd.DataFrame(list(pairs), index=df.index)
+
+    return df
 
 
 
