@@ -16,11 +16,12 @@ def _make_csv_path() -> Path:
 # 実行ごとに新規ファイルを使う
 CSV_PATH = _make_csv_path()
 
-# 残す列
+# 残す列（★ 物件名を追加）
 COLUMNS = [
     "url",
     "fetched_at",
     "status",
+    "property_name",         # ← 追加（内部名）
     "location",
     "station_walk",
     "built_ym",
@@ -35,7 +36,7 @@ def _ensure_csv():
     """CSVがなければ新規作成"""
     if not CSV_PATH.exists():
         with CSV_PATH.open("w", newline="", encoding="utf-8-sig") as f:
-            w = csv.DictWriter(f, fieldnames=COLUMNS)
+            w = csv.DictWriter(f, fieldnames=COLUMNS, extrasaction="ignore")
             w.writeheader()
 
 def _load_all() -> List[Dict[str, str]]:
@@ -43,6 +44,7 @@ def _load_all() -> List[Dict[str, str]]:
     rows: List[Dict[str, str]] = []
     with CSV_PATH.open("r", newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
+        # 既存ファイルが旧スキーマでも安全に読む
         for r in reader:
             row = {col: r.get(col, "") for col in COLUMNS}
             if (row.get("url") or "").strip():  # url空は除外
@@ -52,7 +54,7 @@ def _load_all() -> List[Dict[str, str]]:
 def _write_all(rows: List[Dict[str, str]]):
     tmp = CSV_PATH.with_suffix(".tmp")
     with tmp.open("w", newline="", encoding="utf-8-sig") as f:
-        w = csv.DictWriter(f, fieldnames=COLUMNS)
+        w = csv.DictWriter(f, fieldnames=COLUMNS, extrasaction="ignore")
         w.writeheader()
         for r in rows:
             row = {col: r.get(col, "") for col in COLUMNS}
@@ -65,8 +67,9 @@ def _now_iso_utc() -> str:
 
 # ---------- meta 展開 ----------
 
-def _extract_meta(meta: dict) -> Dict[str, str]:
-    def pick(*keys, default=""):
+def _extract_meta(meta: dict, title: str = "") -> Dict[str, str]:
+    """meta から内部列用に値を抽出。ラベル揺れとフォールバックに対応。"""
+    def pick(keys, default=""):
         for k in keys:
             if k in meta and meta[k] is not None:
                 v = str(meta[k]).strip()
@@ -74,13 +77,19 @@ def _extract_meta(meta: dict) -> Dict[str, str]:
                     return v
         return default
 
+    # 物件名のラベル揺れを吸収（最後にtitleフォールバック）
+    property_name = pick(["物件名", "マンション名", "建物名", "名称"])
+    if not property_name:
+        property_name = (title or "").strip()
+
     return {
-        "location": pick("location", "所在地", "住所"),
-        "station_walk": pick("station_walk", "駅徒歩", "沿線・駅"),
-        "built_ym": pick("built_ym", "築年月", "築年"),
-        "exclusive_area_sqm": pick("exclusive_area_sqm", "専有面積", "面積"),
-        "layout": pick("layout", "間取り"),
-        "price_jpy": pick("price_jpy", "販売価格", "価格", "price"),
+        "property_name": property_name,
+        "location":      pick(["location", "所在地", "住所"]),
+        "station_walk":  pick(["station_walk", "駅徒歩", "沿線・駅"]),
+        "built_ym":      pick(["built_ym", "築年月", "築年"]),
+        "exclusive_area_sqm": pick(["exclusive_area_sqm", "専有面積", "面積"]),
+        "layout":        pick(["layout", "間取り"]),
+        "price_jpy":     pick(["price_jpy", "販売価格", "価格", "price"]),
     }
 
 # ---------- 公開API ----------
@@ -100,12 +109,13 @@ def upsert_review(conn, url: str, status: int, title: str, body: str, meta: dict
             idx = i
             break
 
-    meta_ex = _extract_meta(meta or {})
+    meta_ex = _extract_meta(meta or {}, title=title)
 
     rec = {
         "url": url.strip(),
         "fetched_at": _now_iso_utc(),
         "status": str(status),
+        "property_name": meta_ex["property_name"],     # ← 追加
         "location": meta_ex["location"],
         "station_walk": meta_ex["station_walk"],
         "built_ym": meta_ex["built_ym"],
