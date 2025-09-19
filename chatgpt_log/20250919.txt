@@ -1,0 +1,2448 @@
+コンテンツへとスキップする
+チャット履歴
+
+あなた:
+https://github.com/britishbluecat/reconstruction_LLM/tree/dev
+
+上記にアクセスして、まずは、chatgpt_logの内容を確認して、キャッチアップしてください。
+
+この二件でキャッチアップできます。 20250915.txt 20250915.md
+ChatGPT:
+
+思考時間: 48s
+アクセスしました。まず、リポジトリ概要は把握できています：
+
+PoCの目的：物件情報から「建て替え／リノベ／解体（更地売却）」の3案比較、法令・制度上の留意点、提案文ドラフト、現地確認チェックリストを出力すること。使い方は requirements.txt で環境構築→src/prompt.py 実行の想定。今後はプロンプト改良や法令データのRAG組込み、Markdown→PDF整形がタスクに挙がっています。 
+GitHub
+
+一方でご指定の chatgpt_log/20250915.txt と chatgpt_log/20250915.md は、GitHub側の表示エラーで内容本文が読み込めませんでした（chatgpt_log 配下や当該ファイルURLには到達できるものの、本文レンダリングがブロックされます）。 
+GitHub
++2
+GitHub
++2
+
+すぐにキャッチアップを完了するために
+お手数ですが、以下どちらかで内容を共有していただければ、その場で要点抽出と次アクション化まで行います。
+
+2ファイル（20250915.txt / 20250915.md）の本文をこのチャットに貼り付け
+
+同内容をGistやPastebin等のプレーンテキストで公開（URLを共有）
+
+貼り付け形式の例：
+
+--- 20250915.txt ---
+(本文)
+
+--- 20250915.md ---
+(本文)
+届き次第、要約（目的/入力/出力/保留課題/意思決定）→タスク分解（今日やること・ブランチ/PR方針・検証データ）→不足情報リスト、まで一気に仕上げます。
+
+ChatGPT:
+はい、その通りです。
+「不動産屋さん向けのExcel処理フロー」をまとめると、以下の形がベストプラクティスになります。
+
+1. 列の扱い（物理名 ⇔ 論理名）
+Excel側（不動産屋さん利用時）：
+
+住所 / 築年 / 面積 / 築造 / 状態 / 希望用（論理名、日本語）を使用。
+
+内部処理（GPTに渡すとき）：
+
+location / building_age / floor_area / structure / current_condition / desired_use（物理名、英語）に変換。
+
+dictionary で相互変換して吸収。
+
+2. 処理フロー（tkinter GUIでExcel選択）
+ユーザーがGUIからExcelファイルを選択。
+
+pandas で読み込み → 論理名/物理名を正規化。
+
+各行をGPTへ渡し、7列を生成：
+
+案
+
+初期費用目安
+
+工期感
+
+メリット
+
+デメリット
+
+主なリスク
+
+向いている施主
+
+元のExcelに7列を追加。
+
+ファイル名を filename_処理済み.xlsx として保存。
+
+3. 必要パッケージ
+標準ライブラリ: tkinter
+
+外部ライブラリ: openai, python-dotenv, pandas, openpyxl
+
+requirements.txt に追加：
+
+openai
+python-dotenv
+pandas
+openpyxl
+4. ファイル構成（dev branchに追加推奨）
+src/
+ ├── prompt.py      # プロンプトテンプレート
+ ├── advisor.py     # CLI版（既存）
+ └── excel_gui.py   # GUI + Excel処理版 ←新規
+5. 実装イメージ（抜粋）
+# src/excel_gui.py
+import tkinter as tk
+from tkinter import filedialog, messagebox
+import pandas as pd
+from dotenv import load_dotenv
+from openai import OpenAI
+
+LOGICAL_TO_PHYSICAL = {"住所":"location","築年":"building_age","面積":"floor_area",
+                       "築造":"structure","状態":"current_condition","希望用":"desired_use"}
+
+OUTPUT_COLS = ["案","初期費用目安","工期感","メリット","デメリット","主なリスク","向いている施主"]
+
+def main():
+    root = tk.Tk(); root.withdraw()
+    filepath = filedialog.askopenfilename(filetypes=[("Excel","*.xlsx")])
+    if not filepath: return
+    df = pd.read_excel(filepath)
+    # 論理名→物理名変換
+    df = df.rename(columns={j:p for j,p in LOGICAL_TO_PHYSICAL.items()})
+    # 各行処理（GPT呼び出し部分は省略）
+    for idx,row in df.iterrows():
+        df.loc[idx, OUTPUT_COLS] = ["案A","費用1000万","6ヶ月","新築同様","高額","地盤リスク","長期居住者"]
+    outpath = filepath.replace(".xlsx","_処理済み.xlsx")
+    df.to_excel(outpath,index=False)
+    messagebox.showinfo("完了",f"保存しました: {outpath}")
+
+if __name__=="__main__":
+    main()
+✅ この形なら、不動産屋さんが慣れた Excel で入力・出力でき、内部的には GPT を噛ませて7列を自動生成できます。
+👉 神崎さん、この excel_gui.py を dev branch に置いて試し、まずは「GPT呼び出しをダミー値」で埋める→次に実際の GPT 応答を組み込む、という段階的進め方で良いですか？
+
+あなた:
+キャッチアップできましたか。
+ChatGPT:
+はい、キャッチアップ完了しました ✅
+
+今回アップロードいただいた 20250915.txt / 20250915.md の内容を整理すると：
+
+📌 20250915 の開発ログの要点
+修正対象
+src/storage.py
+
+修正内容
+保存する列を 7列固定 に絞る：
+url, fetched_at, status, location, station_walk, built_ym, exclusive_area_sqm, layout, price_jpy
+
+url が空行は保存しない
+
+ファイル名：
+YYYYMMDDhhmm-suumo_reviews.csv （prefixつき）
+
+文字コード：
+BOM付きUTF-8 (utf-8-sig)
+
+背景
+スクレイプしたCSVに不要列が多く、url が空行もあった
+
+不動産屋がExcelで開くことを前提に、文字コードをBOM付きUTF-8に統一したい
+
+今後のTODO
+駅名も抽出できるようにするか検討
+
+バルコニー面積や総戸数など、追加で欲しいカラムを順次拡張
+
+【参考】ログ中では「chatgpt_log」に記録されており、これは 開発の決定事項メモ として利用されています
+20250915
+
+。
+
+🎯 キャッチアップの結論
+現在は スクレイピングCSVのクレンジングと保存仕様統一 が進行中
+
+次の開発ステップは Excelユーザー（不動産屋）前提のUI/出力整備（すでに神崎さんが Excel 対応を検討 → tkinter案まで進んでいる）
+
+dev ブランチで実装中の advisor.py / prompt.py と並行して、
+scraper → storage → Excel出力 → GPTで列補完 の一連の流れを形にしていくフェーズです
+
+👉 このキャッチアップを踏まえて、次は
+
+storage.py の7列保存対応をdevで実装
+
+excel_gui.py でExcel追加列を自動生成する処理を統合
+
+に進めるのが自然だと思います。
+
+神崎さん、次は storage.py 修正コードの具体例 をこちらで提示しますか？ それとも Excel GUIの方を優先して完成させる流れにしますか？
+
+
+情報源
+あなた:
+LLM開発を理解する為のプロジェクトです。
+自分の理解だと、LLM開発自体は、モデルを構築するわけではなく、既存モデル（GPTなど）を利用して、オープンブック試験の形で、例えば自社データを参照しながら判断してもらうことです。その理解であっていますか。
+ChatGPT:
+はい、その理解はとても良い線をついています 👍
+
+✅ LLM開発の本質
+LLM 開発といっても モデルをゼロから訓練すること ではなく、実務では多くの場合：
+
+既存の大規模モデル（GPTなど）を利用
+
+自前で学習するのは非常にコスト・データ量が大きい
+
+多くの企業は「既存モデル + チューニング」で十分な性能を得る
+
+自社データを参照できるようにする
+
+例：「オープンブック試験」方式
+
+モデルが暗記している知識だけでなく、外部のDBや文書（自社マニュアル、契約書、法令集など）を取り出して参照する
+
+この仕組みが RAG (Retrieval-Augmented Generation) と呼ばれる
+
+プロンプト設計やパイプラインでの判断強化
+
+プロンプトで出力形式やトーンを制御
+
+外部の数値計算（統計モデル、シミュレーション）と組み合わせて、より信頼性のある回答を出す
+
+📝 イメージ図
+LLM本体 (GPTなど) → 「言語処理の頭脳」
+
+外部知識ベース (自社データ, DB, API, Excel, PDF) → 「オープンブック」
+
+統計/MLモジュール (数値予測, シミュレーション) → 「計算機」
+
+UI (チャット/Excel/tkinter/Webアプリ) → 「使いやすい窓口」
+
+LLM単体 = 言語のインターフェース
+LLM + 自社データ参照 = オープンブック試験
+LLM + 数値モデル = 論理と言語を組み合わせた意思決定支援
+
+🔑 まとめ
+神崎さんの理解通り、「LLM開発」= 既存モデルに自社データや外部機能を組み合わせること が中心です。
+
+研究者の領域（ゼロからモデル構築）と、ビジネスの領域（GPTを業務に組み込む）は別物です。
+
+今進めている「不動産アドバイザーPoC」も、まさに GPT + 自社データ(Excel) + プロンプト設計 の典型例になっています。
+
+👉 ここで確認ですが、神崎さんは 「まずはオープンブック方式（RAG）」を体験したい ですか？
+それとも 「ExcelやAPIとGPTをつないで使える形」を優先したい ですか？
+
+あなた:
+企業、b2bの場合では、機密情報が洩れるリスクを抱えていることで、一度確認したいですが、RAG、今回のやり方だと、リポジトリにある情報、スクレイピングで取得した情報は、絶対chatgptや、第三者や別者に閲覧されることがないですか。また、閲覧じゃなくても、chatgptモデルに入ってしまう可能性はありますか
+ChatGPT:
+とても大事な観点です。ここは誤解されやすいので、整理してお伝えしますね。
+
+🔒 RAGと情報漏洩リスクについて
+1. GPTに渡したデータは「学習に使われない」
+OpenAIのAPI経由で利用する場合、送信したデータはモデルの再学習（ファインチューニング）に組み込まれることはありません。
+
+つまり「社内データを渡したらGPTに覚え込まれて第三者に漏れる」ということは ない です。
+
+これはOpenAIの公式ポリシーにも明記されています（ChatGPT無料版の「会話を改善に利用する」機能とは別です）。
+
+2. RAG方式なら「オープンブック参照のみ」
+今回の開発スタイル（リポジトリやスクレイピングしたCSVをRAG経由で参照）は、
+あくまで自分のアプリケーション内で検索→GPTにコンテキストとして一時的に渡す 仕組みです。
+
+GPTはその都度、会話の一部として処理するだけで、裏側の「大規模モデル本体」に保存されることはありません。
+
+3. データが「第三者に閲覧される」こともない
+OpenAIのAPI通信はTLSで暗号化されており、データは外部の他ユーザーや第三者に閲覧されません。
+
+ただし OpenAIのサーバを経由する ので、法規制や社内ポリシーによっては「クラウドに送信すること自体がNG」になるケースがあります。
+
+その場合は オンプレ/専用環境で動くオープンソースモデル（Llama 3、Fugaku-LLM、LLM-jpなど）を使えば、完全に社内ネットワーク内で閉じられます。
+
+⚖️ まとめると
+API経由のGPT利用: データは学習に使われない。第三者にも共有されない。
+
+RAG: 自社データを「一時的に参照させるだけ」で、モデル本体に残らない。
+
+懸念が残る場合: オンプレ運用できるオープンソースLLMを選択すると「絶対外に出ない」構成も可能。
+
+👉 神崎さんのケースだと、今のPoC段階（学習やPoC開発）ではGPT API利用で十分安全です。
+ただし、将来的に「B2Bで本番導入」するなら、
+
+顧客データは匿名化する
+
+クラウド利用ポリシーを確認する
+
+必要なら社内専用のベクトルDB + オープンソースLLM に切り替える
+
+このあたりの「リスク回避設計」もセットで考えるのが安心です。
+
+神崎さんは、今回のPoCを クラウドGPTベースで進める想定 ですか？
+それとも 将来的にオンプレ対応（オープンソースLLM + RAG）も見据えておきたい ですか？
+
+あなた:
+今回のPOCは、あくまでもAIの試しです。プロダクトの汎用性が最も重要で、顧客ができたら、更にフォークして、企業様ごとでのフォークで、具体的なニーズに合わせることで良いと考えています。それにあたっては、情報漏洩やリスクを理解しなければなりません。顧客が、AI、CHATGPTというキーワードを聞いたら、情報漏洩の懸念、その話が出やすい状況です。
+ChatGPT:
+なるほど、よく整理されてますね。神崎さんの考え方（まずはPoCで汎用プロダクト → 企業ごとにフォーク → 顧客ニーズに合わせる）は、AI導入の現実的な進め方そのものです。
+
+ただおっしゃる通り、「ChatGPT」という言葉を出した瞬間に、顧客側から情報漏洩リスクの懸念が強く出るのは典型的なシナリオです。ここをきちんと説明・設計できるかどうかが営業面でも信頼につながります。
+
+🔑 顧客が懸念する典型パターン
+「入力したデータが外部に学習されるのでは？」
+→ 実際は API経由のGPTは学習に利用されない。
+
+「機密情報が第三者に見られるのでは？」
+→ 通信は暗号化され、外部に共有されない。
+
+「クラウドにデータが出ること自体がNG」
+→ 規制業界（金融・医療・官公庁など）では特に多い。
+
+✅ 安全設計のレベル分け（顧客への説明に使える）
+レベル1：PoC / 軽量導入（今回の状況）
+OpenAI API を利用（クラウド）
+
+データは学習に使われず、外部に共有されない
+
+機密性の高い情報は入力しない運用ルールで回避
+
+👉 PoC段階はこの説明で十分
+
+レベル2：セキュリティ意識の高い企業向け
+匿名化 / マスキング：氏名・住所などは置換して処理
+
+社内ベクトルDB (RAG)：生データは社内DBに置き、GPTには必要部分だけを渡す
+
+ログ管理：API送受信を記録し、万一の調査に備える
+
+👉 「情報は外に出ません。参照だけGPTに渡しています」と言える
+
+レベル3：厳格な業界向け（将来のフォークで対応）
+オープンソースLLM（Llama3、Fugaku-LLMなど）をオンプレ / VPC環境で運用
+
+外部クラウドに一切データを出さない構成
+
+セキュリティ審査にも耐えられる
+
+👉 「AIは社内サーバ内で閉じています。情報漏洩の心配はゼロです」と言える
+
+🎯 神崎さんのPoCでの立ち位置
+今回のPoCは レベル1 で十分
+
+営業資料や顧客向け説明では、必ず 「将来はレベル2/3の対応も可能」 と伝える
+
+そうすれば「ChatGPT＝情報漏洩リスク」という誤解を和らげられる
+
+💡 営業で使える一言例
+「はい、ChatGPTを利用していますが、API経由で送ったデータは学習に利用されず、他社に共有されることもありません。
+さらに、もし御社のセキュリティ要件が厳しい場合は、外部にデータを出さずに社内サーバだけで動く構成にも対応できます。」
+
+👉 神崎さん、このPoCの段階で、まずは 「レベル1の安全設計」 をまとめた説明資料を一緒に作りますか？
+（例えば README に「セキュリティ上の配慮」という章を追加すると、顧客に見せやすいです）
+
+あなた:
+「データを、パスワード付ZIPファイルに入れて、chatgptにパスワードを教えて事は可能ですか。」
+上記の質問を聞いて、「できない」と答えられました。
+
+なぜ聞いたかというと、パソコンに詳しくない方々ならば、パスワード、パスワード付、ZIPファイルになじみがあるからベストです。CHATGPTで解凍できなければ、それと似たような方法、CHATGPTが対応できる方法が知りたいです。B2Bならば、なじみのあるものが鍵となります。
+
+例えば、暗号化されたファイルで、解除用pairファイルがなければ、データを読み込めない方法が良い。a.csv > a.secret_data, 或るsecret_dataフォーマットを csv に変換するには、a.secret_data_pair が必要など。chatgptに、自動で、自らfernetのようなPythonスクリプトを実行してもらって、decrypt
+
+ChatGPT:
+すごく本質的な視点ですね。💡
+「B2Bでパソコンに詳しくない人でも“パスワード付きZIP”のように安心できる仕組みが欲しい」という発想は正しいです。
+ただし、ChatGPT（＝OpenAIのクラウド側モデル）には、パスワード付きZIPを解凍する機能はありません。これはセキュリティ制約で、「任意の暗号解除をクラウドにさせる」ことはリスクが高いため提供されていないのです。
+
+✅ 代替アプローチ（ChatGPTが対応できる形）
+神崎さんのアイデア「a.csv → a.secret_data + a.secret_data_pair → 復号して利用」に近いことは、クライアントサイドで暗号化/復号する仕組みを作れば実現可能です。
+
+1. 実現の仕組み
+ローカル/自社環境で暗号化
+
+例：fernet (AESベース) で a.csv を a.secret_data に変換
+
+復号キーは a.secret_data_pair（鍵ファイル or パスワード）に保存
+
+ChatGPTには「復号後の平文データ」だけ渡す
+
+GPT API は暗号化/復号処理をしてくれるわけではない
+
+「平文にする工程」を必ず自社のコード内で実行する
+
+ユーザー体験
+
+不動産屋さんには「パスワード付きZIP」を配るのと同じUXにできる
+
+実際には「CSVをアップロード → 内部で復号 → GPTに送信」という流れ
+
+2. 例：Fernetを使った簡単な仕組み
+from cryptography.fernet import Fernet
+
+# 鍵生成（初回だけ）
+key = Fernet.generate_key()
+with open("a.secret_data_pair", "wb") as f:
+    f.write(key)
+
+# 暗号化
+cipher = Fernet(key)
+data = open("a.csv", "rb").read()
+enc = cipher.encrypt(data)
+open("a.secret_data", "wb").write(enc)
+
+# 復号化（GPTに渡す直前）
+key = open("a.secret_data_pair", "rb").read()
+cipher = Fernet(key)
+dec = cipher.decrypt(open("a.secret_data", "rb").read())
+open("a_restored.csv", "wb").write(dec)
+3. ChatGPTとの連携の現実的な方法
+ChatGPTに暗号化ファイルを直接渡すことはできない（解凍できない）
+
+代わりに 自社のアプリで復号 → GPT APIへ送信 するパターンが安全・現実的
+
+つまり：
+
+ユーザーには「暗号化ファイル」だけ渡す（安心感がある）
+
+自社アプリが「鍵ファイル」も持っている（またはユーザーが入力）
+
+復号後のデータをGPTに流して処理
+
+🎯 B2B説明のポイント
+不動産屋さんのようにITリテラシーが低いユーザーには：
+
+**「パスワード付きファイルを渡してください」**という運用ルールをそのまま説明できる
+
+実際の裏側では 暗号化解除は自社環境だけ で行い、GPTには平文だけを送る
+
+**「GPTが直接暗号を解くことはない＝情報漏洩リスクがない」**と強調できる
+
+🔑 まとめ
+ChatGPT自身は「暗号化ファイルを解凍する」ことはできない
+
+代替案は 自社システムで暗号化/復号 → GPTには復号後だけ渡す
+
+ユーザー体験としては「パスワード付きZIPに似た安心感」を演出できる
+
+技術的には cryptography.fernet や AES を使った a.secret_data / a.secret_data_pair 方式が現実的
+
+👉 神崎さん、この仕組みを 今回のPoC（不動産Excel処理）に組み込む設計例 をお出ししましょうか？
+（例：Excelを暗号化してやり取り → 復号後にGPTに渡して処理 → 結果Excelを再暗号化して返す）
+
+あなた:
+https://suumo.jp/jj/bukken/ichiran/JJ012FC001/?ar=030&bs=011&ra=030013&rn=0010&rnTemp=0010&rnek=001012200&po=0&pj=1&pc=100
+
+url_list.txtに、上記のURL を入れたら、1件しか返ってこないです。
+サイトから、表示件数を100件にしただけです。
+
+suumo_mansion_review.pyを更新してください。
+
+import os
+import re
+import time
+import random
+from urllib.parse import urljoin
+
+import requests
+from bs4 import BeautifulSoup
+
+USER_AGENT = os.getenv("USER_AGENT", "ReconstructionLLM/1.0")
+REQUEST_INTERVAL = float(os.getenv("REQUEST_INTERVAL", "1.0"))
+HEADERS = {"User-Agent": USER_AGENT, "Accept-Language": "ja,en;q=0.8"}
+
+def polite_sleep():
+    time.sleep(REQUEST_INTERVAL + random.uniform(0, 0.5))
+
+def fetch(url: str) -> requests.Response:
+    return requests.get(url, headers=HEADERS, timeout=20)
+
+# --------- 正規表現（補助） ----------
+RE_PRICE  = re.compile(r"(\d[\d,]*\s*万(?:円)?|\d[\d,]*\s*円)")
+RE_SQM_TX = re.compile(r"(\d+(?:\.\d+)?)")
+RE_WALK   = re.compile(r"徒歩\s*\d+\s*分")
+RE_BUILT  = re.compile(r"(\d{4})年\s*(\d{1,2})月")
+
+def _text(el) -> str:
+    return el.get_text(" ", strip=True) if el else ""
+
+def _normalize_sqm(dd_el) -> str:
+    """dd要素内の m<sup>2</sup> を ㎡ に。数字+㎡ を返す（例：33.65㎡）。括弧など補記は残さない。"""
+    if dd_el is None:
+        return ""
+    # supを展開して文字列化
+    for sup in dd_el.find_all("sup"):
+        sup.replace_with("^" + sup.get_text("", strip=True))
+    raw = dd_el.get_text("", strip=True)
+    # "m^2" → "㎡"
+    raw = raw.replace("m^2", "㎡").replace("m2", "㎡")
+    # 先頭の数値を抽出して "X㎡" に（見た目優先）
+    m = RE_SQM_TX.search(raw)
+    return f"{m.group(1)}㎡" if m else raw
+
+def _pick_dd_by_dt_label(container, label: str):
+    """
+    dottable-line 内の <dl><dt>label</dt><dd>...</dd></dl> から dd を返す。
+    複数あれば最初。
+    """
+    for dl in container.select("dl"):
+        dt = dl.find("dt")
+        if dt and dt.get_text("", strip=True) == label:
+            return dl.find("dd")
+    return None
+
+def parse_listing_card(card: BeautifulSoup, base_url: str) -> dict:
+    """
+    一覧ページの property_unit 1件をパース。
+    """
+    # タイトル & 詳細リンク
+    a = card.select_one(".property_unit-header h2 a")
+    title = _text(a)
+    href = a["href"].strip() if a and a.has_attr("href") else ""
+    detail_url = urljoin(base_url, href) if href else base_url
+
+    # 価格（カード上部の価格領域 or 生テキストから）
+    price = _text(card.select_one(".price, .property_unit-price, .dottable-value.price"))
+    if not price:
+        m = RE_PRICE.search(_text(card))
+        price = m.group(1) if m else ""
+
+    # 住所/面積/間取り/築年月/徒歩 を dottable-line の dt/dd から取得
+    # 1) 直下の dottable-line 群をスキャン
+    #    例1: <dl><dt>専有面積</dt><dd>33.65m<sup>2</sup>（壁芯）</dd></dl>
+    #    例2: <dl><dt>所在地</dt><dd>東京都中央区銀座８</dd></dl>
+    dot_blocks = card.select(".dottable-line")
+
+    location = ""
+    layout = ""
+    sqm = ""
+    built = ""
+    walk = ""
+
+    for blk in dot_blocks:
+        # 所在地
+        if not location:
+            dd = _pick_dd_by_dt_label(blk, "所在地")
+            if dd:
+                location = dd.get_text(" ", strip=True)
+
+        # 専有面積
+        if not sqm:
+            dd = _pick_dd_by_dt_label(blk, "専有面積")
+            if dd:
+                sqm = _normalize_sqm(dd)
+
+        # 間取り
+        if not layout:
+            dd = _pick_dd_by_dt_label(blk, "間取り")
+            if dd:
+                layout = dd.get_text("", strip=True)
+
+        # 築年月
+        if not built:
+            dd = _pick_dd_by_dt_label(blk, "築年月")
+            if dd:
+                built = dd.get_text("", strip=True)
+            else:
+                # フォールバック：ブロックテキストから拾う
+                m = RE_BUILT.search(_text(blk))
+                if m:
+                    built = f"{m.group(1)}年{m.group(2)}月"
+
+        # 沿線・駅 → 徒歩
+        if not walk:
+            dd = _pick_dd_by_dt_label(blk, "沿線・駅")
+            if dd:
+                m = RE_WALK.search(dd.get_text(" ", strip=True))
+                walk = m.group(0) if m else ""
+
+    # 住所が未取得なら、カード全体テキストから都区市町村っぽい断片を拾う（弱フォールバック）
+    if not location:
+        # 最低限：タイトルやカード内に「東京都」「中央区」などがあれば拾う
+        raw = _text(card)
+        m = re.search(r"(東京都[^\s　、，]+|.+区|.+市)", raw)
+        if m:
+            location = m.group(1)
+
+    meta = {
+        "所在地": location,
+        "駅徒歩": walk,
+        "築年月": built,
+        "専有面積": sqm,
+        "間取り": layout,
+        "販売価格": price,
+        "source": base_url,
+    }
+
+    return {
+        "url": detail_url,
+        "title": title,
+        "body": "",  # 一覧カードは本文なし
+        "meta": meta,
+    }
+
+def parse_list_page(html: str, base_url: str) -> list[dict]:
+    soup = BeautifulSoup(html, "lxml")
+    cont = soup.select_one("#js-bukkenList") or soup
+    cards = cont.select("div.property_unit")
+    items = []
+    for card in cards:
+        try:
+            items.append(parse_listing_card(card, base_url))
+        except Exception:
+            continue
+    return items
+
+def parse_detail_page(html: str, base_url: str) -> dict:
+    """
+    詳細ページ（/nc_...）の簡易パーサ：dt/dd を優先的に見る
+    """
+    soup = BeautifulSoup(html, "lxml")
+    title = _text(soup.select_one("title"))
+
+    location = ""
+    layout = ""
+    sqm = ""
+    built = ""
+    walk = ""
+    price = ""
+
+    # dottable-line 優先
+    for blk in soup.select(".dottable-line"):
+        if not location:
+            dd = _pick_dd_by_dt_label(blk, "所在地")
+            if dd:
+                location = dd.get_text(" ", strip=True)
+        if not sqm:
+            dd = _pick_dd_by_dt_label(blk, "専有面積")
+            if dd:
+                sqm = _normalize_sqm(dd)
+        if not layout:
+            dd = _pick_dd_by_dt_label(blk, "間取り")
+            if dd:
+                layout = dd.get_text("", strip=True)
+        if not built:
+            dd = _pick_dd_by_dt_label(blk, "築年月")
+            if dd:
+                built = dd.get_text("", strip=True)
+        if not walk:
+            dd = _pick_dd_by_dt_label(blk, "沿線・駅")
+            if dd:
+                m = RE_WALK.search(dd.get_text(" ", strip=True))
+                walk = m.group(0) if m else ""
+        if not price:
+            # 詳細では価格が別領域にある事が多いので生テキストfallback
+            m = RE_PRICE.search(_text(blk))
+            if m:
+                price = m.group(1)
+
+    if not price:
+        m = RE_PRICE.search(_text(soup))
+        price = m.group(1) if m else ""
+
+    meta = {
+        "所在地": location,
+        "駅徒歩": walk,
+        "築年月": built,
+        "専有面積": sqm,
+        "間取り": layout,
+        "販売価格": price,
+        "source": base_url,
+    }
+    return {"url": base_url, "title": title, "body": "", "meta": meta}
+
+なお、HTML自体。
+
+<div class="dottable dottable--cassette">
+							<div class="dottable-line">
+									<dl>
+										<dt class="dottable-vm">物件名</dt>
+										<dd class="dottable-vm">銀座タワー</dd>
+									</dl>
+								</div>
+							<div class="dottable-line">
+								<dl>
+									<dt class="dottable-vm">販売価格</dt>
+									<dd class="dottable-vm">
+										<span class="dottable-value">1億1500万円</span>
+									</dd>
+									</dl>
+							</div>
+							<div class="dottable-line">
+								<dl>
+									<dt>所在地</dt>
+									<dd>東京都中央区銀座１</dd>
+								</dl>
+								<dl>
+									<dt>沿線・駅</dt>
+									<dd>東京メトロ銀座線「銀座」徒歩8分</dd>
+								</dl>
+							</div>
+							<div class="dottable-line">
+										<table class="dottable-fix">
+											<tbody>
+												<tr>
+													<td>
+														<dl>
+															<dt>専有面積</dt>
+															<dd>75.77m<sup>2</sup>（22.92坪）（壁芯）</dd>
+														</dl>
+													</td>
+													<td>
+														<dl>
+															<dt>間取り</dt>
+															<dd>2LDK</dd>
+														</dl>
+													</td>
+												</tr>
+											</tbody>
+										</table>
+									</div>
+									<div class="dottable-line">
+										<table class="dottable-fix">
+											<tbody>
+												<tr>
+													<td>
+														<dl>
+															<dt>バルコニー</dt>
+															<dd>7.21m<sup>2</sup></dd>
+														</dl>
+													</td>
+													<td>
+														<dl>
+															<dt>築年月</dt>
+															<dd>2003年7月</dd>
+														</dl>
+													</td>
+												</tr>
+											</tbody>
+										</table>
+									</div>
+								<div class="dottable-line">
+										<div class="pickupphotos">
+											<div class="pickupphotos-title">掲載写真</div>
+											</div>
+										<ul class="property_unit-info-pct ui-list--hz">
+											<li><span class="ui-pct ui-label--cta3">間取り図</span></li>
+														<li><span class="ui-pct ui-label--cta3">外観</span></li>
+														<li><span class="ui-pct ui-label--cta3">エントランス</span></li>
+														<li><span class="ui-pct ui-label--cta3">周辺環境</span></li>
+														</ul>
+									</div>
+								</div>
+ 
+ChatGPT:
+
+思考時間: 45s
+了解。pc=100 にしても 1件しか取れないのは、SUUMO 側で一覧カードの DOM が 2系統 混在（div.property_unit と、あなたが貼ってくれた dottable dottable--cassette 系）しているため、現行コードが後者を拾えていないのが主因です。ついでに ページネーション（pn=…） も踏むように直しました。
+
+下の最新版に差し替えてください（両方のカード型に対応 + 次ページ巡回）。
+
+suumo_mansion_review.py（置き換え版）
+import os
+import re
+import time
+import random
+from urllib.parse import urljoin, urlparse, parse_qs, urlencode, urlunparse
+
+import requests
+from bs4 import BeautifulSoup
+
+USER_AGENT = os.getenv("USER_AGENT", "ReconstructionLLM/1.0")
+REQUEST_INTERVAL = float(os.getenv("REQUEST_INTERVAL", "1.0"))
+HEADERS = {"User-Agent": USER_AGENT, "Accept-Language": "ja,en;q=0.8"}
+
+def polite_sleep():
+    time.sleep(REQUEST_INTERVAL + random.uniform(0, 0.5))
+
+def fetch(url: str) -> requests.Response:
+    return requests.get(url, headers=HEADERS, timeout=20)
+
+# --------- 正規表現（補助） ----------
+RE_PRICE  = re.compile(r"(\d[\d,]*\s*万(?:円)?|\d[\d,]*\s*円)")
+RE_SQM_TX = re.compile(r"(\d+(?:\.\d+)?)")
+RE_WALK   = re.compile(r"徒歩\s*\d+\s*分")
+RE_BUILT  = re.compile(r"(\d{4})年\s*(\d{1,2})月")
+
+def _text(el) -> str:
+    return el.get_text(" ", strip=True) if el else ""
+
+def _normalize_sqm(dd_el) -> str:
+    """dd要素内の m<sup>2</sup> を ㎡ に。数字+㎡ を返す（例：33.65㎡）。括弧など補記は残さない。"""
+    if dd_el is None:
+        return ""
+    for sup in dd_el.find_all("sup"):
+        sup.replace_with("^" + sup.get_text("", strip=True))
+    raw = dd_el.get_text("", strip=True)
+    raw = raw.replace("m^2", "㎡").replace("m2", "㎡")
+    m = RE_SQM_TX.search(raw)
+    return f"{m.group(1)}㎡" if m else raw
+
+def _pick_dd_by_dt_label(container, label: str):
+    """ dottable-line 内の <dl><dt>label</dt><dd>...</dd></dl> から dd を返す（最初の一致）。 """
+    # 直接の dl
+    for dl in container.select(":scope dl"):
+        dt = dl.find("dt")
+        if dt and dt.get_text("", strip=True) == label:
+            return dl.find("dd")
+    # テーブル入れ子（dottable-fix）にも対応
+    for dl in container.select(":scope table.dottable-fix dl"):
+        dt = dl.find("dt")
+        if dt and dt.get_text("", strip=True) == label:
+            return dl.find("dd")
+    return None
+
+# ---------------------------
+# 1) 旧来カード: .property_unit
+# ---------------------------
+def parse_listing_card_property_unit(card: BeautifulSoup, base_url: str) -> dict:
+    a = card.select_one(".property_unit-header h2 a, h2 a")
+    title = _text(a)
+    href = a["href"].strip() if a and a.has_attr("href") else ""
+    detail_url = urljoin(base_url, href) if href else base_url
+
+    price = _text(card.select_one(".price, .property_unit-price, .dottable-value.price"))
+    if not price:
+        m = RE_PRICE.search(_text(card))
+        price = m.group(1) if m else ""
+
+    location = ""
+    layout = ""
+    sqm = ""
+    built = ""
+    walk = ""
+
+    for blk in card.select(".dottable-line"):
+        if not location:
+            dd = _pick_dd_by_dt_label(blk, "所在地")
+            if dd: location = dd.get_text(" ", strip=True)
+
+        if not sqm:
+            dd = _pick_dd_by_dt_label(blk, "専有面積")
+            if dd: sqm = _normalize_sqm(dd)
+
+        if not layout:
+            dd = _pick_dd_by_dt_label(blk, "間取り")
+            if dd: layout = dd.get_text("", strip=True)
+
+        if not built:
+            dd = _pick_dd_by_dt_label(blk, "築年月")
+            if dd:
+                built = dd.get_text("", strip=True)
+            else:
+                m = RE_BUILT.search(_text(blk))
+                if m:
+                    built = f"{m.group(1)}年{m.group(2)}月"
+
+        if not walk:
+            dd = _pick_dd_by_dt_label(blk, "沿線・駅")
+            if dd:
+                m = RE_WALK.search(dd.get_text(" ", strip=True))
+                walk = m.group(0) if m else ""
+
+    if not location:
+        raw = _text(card)
+        m = re.search(r"(東京都[^\s　、，]+|.+区|.+市)", raw)
+        if m:
+            location = m.group(1)
+
+    meta = {
+        "所在地": location,
+        "駅徒歩": walk,
+        "築年月": built,
+        "専有面積": sqm,
+        "間取り": layout,
+        "販売価格": price,
+        "source": base_url,
+    }
+    return {"url": detail_url, "title": title, "body": "", "meta": meta}
+
+# -------------------------------------
+# 2) 新型カード: .dottable.dottable--cassette
+#    （あなたが貼ってくれたHTMLに対応）
+# -------------------------------------
+def _find_detail_link_in(block) -> str:
+    # 詳細ページへのリンクは a[href*="/nc_"] や a[href*="/bukken/"] が混在し得るので網羅的に拾う
+    for a in block.select("a[href]"):
+        href = a.get("href", "")
+        if "/nc_" in href or "/bukken/" in href:
+            return href
+    return ""
+
+def parse_listing_card_cassette(cassette: BeautifulSoup, base_url: str) -> dict:
+    # タイトル（物件名）
+    title_dd = None
+    for blk in cassette.select(".dottable-line"):
+        dd = _pick_dd_by_dt_label(blk, "物件名")
+        if dd:
+            title_dd = dd
+            break
+    title = _text(title_dd) if title_dd else ""
+
+    # 価格
+    price = ""
+    for blk in cassette.select(".dottable-line"):
+        dd = _pick_dd_by_dt_label(blk, "販売価格")
+        if dd:
+            price = _text(dd.select_one(".dottable-value")) or dd.get_text("", strip=True)
+            break
+    if not price:
+        m = RE_PRICE.search(_text(cassette))
+        price = m.group(1) if m else ""
+
+    # 所在地・駅徒歩・専有面積・間取り・築年月
+    location = ""
+    layout = ""
+    sqm = ""
+    built = ""
+    walk = ""
+
+    for blk in cassette.select(".dottable-line"):
+        if not location:
+            dd = _pick_dd_by_dt_label(blk, "所在地")
+            if dd: location = dd.get_text(" ", strip=True)
+        if not walk:
+            dd = _pick_dd_by_dt_label(blk, "沿線・駅")
+            if dd:
+                m = RE_WALK.search(dd.get_text(" ", strip=True))
+                walk = m.group(0) if m else ""
+        if not sqm:
+            dd = _pick_dd_by_dt_label(blk, "専有面積")
+            if dd: sqm = _normalize_sqm(dd)
+        if not layout:
+            dd = _pick_dd_by_dt_label(blk, "間取り")
+            if dd: layout = dd.get_text("", strip=True)
+        if not built:
+            dd = _pick_dd_by_dt_label(blk, "築年月")
+            if dd:
+                built = dd.get_text("", strip=True)
+
+    # 詳細リンク（あれば）
+    href = _find_detail_link_in(cassette)
+    detail_url = urljoin(base_url, href) if href else base_url
+
+    meta = {
+        "所在地": location,
+        "駅徒歩": walk,
+        "築年月": built,
+        "専有面積": sqm,
+        "間取り": layout,
+        "販売価格": price,
+        "source": base_url,
+    }
+    return {"url": detail_url, "title": title, "body": "", "meta": meta}
+
+# ---------------------------
+# 一覧ページパース（両型対応）
+# ---------------------------
+def parse_list_page(html: str, base_url: str) -> list[dict]:
+    soup = BeautifulSoup(html, "lxml")
+    cont = soup.select_one("#js-bukkenList") or soup
+
+    items = []
+
+    # 旧来カード
+    for card in cont.select("div.property_unit"):
+        try:
+            items.append(parse_listing_card_property_unit(card, base_url))
+        except Exception:
+            continue
+
+    # 新型カセット
+    for cassette in cont.select("div.dottable.dottable--cassette, div.cassette"):
+        try:
+            items.append(parse_listing_card_cassette(cassette, base_url))
+        except Exception:
+            continue
+
+    return items
+
+# ---------------------------
+# 詳細ページ（念のため据え置き）
+# ---------------------------
+def parse_detail_page(html: str, base_url: str) -> dict:
+    soup = BeautifulSoup(html, "lxml")
+    title = _text(soup.select_one("title"))
+
+    location = layout = sqm = built = walk = price = ""
+
+    for blk in soup.select(".dottable-line"):
+        if not location:
+            dd = _pick_dd_by_dt_label(blk, "所在地")
+            if dd: location = dd.get_text(" ", strip=True)
+        if not sqm:
+            dd = _pick_dd_by_dt_label(blk, "専有面積")
+            if dd: sqm = _normalize_sqm(dd)
+        if not layout:
+            dd = _pick_dd_by_dt_label(blk, "間取り")
+            if dd: layout = dd.get_text("", strip=True)
+        if not built:
+            dd = _pick_dd_by_dt_label(blk, "築年月")
+            if dd: built = dd.get_text("", strip=True)
+        if not walk:
+            dd = _pick_dd_by_dt_label(blk, "沿線・駅")
+            if dd:
+                m = RE_WALK.search(dd.get_text(" ", strip=True))
+                walk = m.group(0) if m else ""
+        if not price:
+            m = RE_PRICE.search(_text(blk))
+            if m: price = m.group(1)
+
+    if not price:
+        m = RE_PRICE.search(_text(soup))
+        price = m.group(1) if m else ""
+
+    meta = {
+        "所在地": location,
+        "駅徒歩": walk,
+        "築年月": built,
+        "専有面積": sqm,
+        "間取り": layout,
+        "販売価格": price,
+        "source": base_url,
+    }
+    return {"url": base_url, "title": title, "body": "", "meta": meta}
+
+# ---------------------------
+# ページネーション対応
+# ---------------------------
+def _build_url_with_page(url: str, page_no: int) -> str:
+    """ &pn= の値を差し替えてURLを返す（無ければ付与） """
+    u = urlparse(url)
+    qs = parse_qs(u.query)
+    qs["pn"] = [str(page_no)]
+    new_query = urlencode(qs, doseq=True)
+    return urlunparse((u.scheme, u.netloc, u.path, u.params, new_query, u.fragment))
+
+def _max_page_in_pagination(soup: BeautifulSoup) -> int:
+    """ ページャがあれば最大ページ番号を推定。無ければ 1。 """
+    max_no = 1
+    for a in soup.select("a[href*='pn=']"):
+        txt = _text(a)
+        try:
+            n = int(txt)
+            if n > max_no:
+                max_no = n
+        except ValueError:
+            continue
+    return max_no
+
+def crawl_list(url: str) -> list[dict]:
+    """ 一覧URL（pc=100対応）から全ページを巡回して物件カードを回収 """
+    results = []
+    polite_sleep()
+    r = fetch(url)
+    r.raise_for_status()
+    first_html = r.text
+    soup = BeautifulSoup(first_html, "lxml")
+    max_page = _max_page_in_pagination(soup)
+    # 1ページ目
+    results.extend(parse_list_page(first_html, url))
+
+    # 2ページ目以降
+    for pn in range(2, max_page + 1):
+        page_url = _build_url_with_page(url, pn)
+        polite_sleep()
+        rr = fetch(page_url)
+        if rr.status_code != 200:
+            break
+        results.extend(parse_list_page(rr.text, page_url))
+
+    return results
+
+# ---------------------------
+# 使い方例
+# ---------------------------
+if __name__ == "__main__":
+    # url_list.txt から読み込んで全件クロール → 件数とサンプルを表示
+    url_list_path = os.getenv("URL_LIST", "url_list.txt")
+    urls = []
+    if os.path.exists(url_list_path):
+        with open(url_list_path, "r", encoding="utf-8") as f:
+            urls = [line.strip() for line in f if line.strip()]
+
+    all_items = []
+    for u in urls:
+        try:
+            items = crawl_list(u)
+            all_items.extend(items)
+            print(f"[OK] {u} -> {len(items)} items")
+        except Exception as e:
+            print(f"[ERR] {u}: {e}")
+
+    print(f"TOTAL: {len(all_items)} items")
+    if all_items:
+        print(all_items[0])
+変更点の要約
+カード検出を二本立て
+
+旧: div.property_unit
+
+新: div.dottable.dottable--cassette（貼ってもらったHTML）や div.cassette
+
+dt/dd ラベル走査を強化（dottable-fix テーブル内も対応）
+
+詳細リンクの検出（/nc_ or /bukken/ を含む <a> をスキャン）
+
+ページネーション対応（pn= クエリを差し替えて全ページ巡回）
+
+既存の正規表現や _normalize_sqm 等は踏襲
+
+これで、pc=100 の一覧でも 複数件を正しく回収 できるはずです。
+もしサイト側のクラス名が更に変わっている箇所があれば、実際のHTML断片をもう少し共有いただければ、その場で追加対応を入れます。
+
+あなた:
+上記コードの内、「物件名」も取得したいです。
+ChatGPT:
+はい、了解しました。
+実は現行コードでも「cassette型」では 物件名 を拾っていますが、旧型カード（property_unit）では拾っていないので、「物件名」列が一貫して取れない状態ですね。
+
+修正版では以下を実装します：
+
+旧型 (property_unit) の場合も 物件名 を探して dd を取得
+
+最終的に meta に "物件名": name を追加
+
+差し替え部分（変更点のみ）
+def parse_listing_card_property_unit(card: BeautifulSoup, base_url: str) -> dict:
+    a = card.select_one(".property_unit-header h2 a, h2 a")
+    title = _text(a)
+    href = a["href"].strip() if a and a.has_attr("href") else ""
+    detail_url = urljoin(base_url, href) if href else base_url
+
+    price = _text(card.select_one(".price, .property_unit-price, .dottable-value.price"))
+    if not price:
+        m = RE_PRICE.search(_text(card))
+        price = m.group(1) if m else ""
+
+    location = ""
+    layout = ""
+    sqm = ""
+    built = ""
+    walk = ""
+    name = ""   # ← 物件名
+
+    for blk in card.select(".dottable-line"):
+        if not name:
+            dd = _pick_dd_by_dt_label(blk, "物件名")
+            if dd:
+                name = dd.get_text(" ", strip=True)
+
+        if not location:
+            dd = _pick_dd_by_dt_label(blk, "所在地")
+            if dd: location = dd.get_text(" ", strip=True)
+
+        if not sqm:
+            dd = _pick_dd_by_dt_label(blk, "専有面積")
+            if dd: sqm = _normalize_sqm(dd)
+
+        if not layout:
+            dd = _pick_dd_by_dt_label(blk, "間取り")
+            if dd: layout = dd.get_text("", strip=True)
+
+        if not built:
+            dd = _pick_dd_by_dt_label(blk, "築年月")
+            if dd:
+                built = dd.get_text("", strip=True)
+            else:
+                m = RE_BUILT.search(_text(blk))
+                if m:
+                    built = f"{m.group(1)}年{m.group(2)}月"
+
+        if not walk:
+            dd = _pick_dd_by_dt_label(blk, "沿線・駅")
+            if dd:
+                m = RE_WALK.search(dd.get_text(" ", strip=True))
+                walk = m.group(0) if m else ""
+
+    if not location:
+        raw = _text(card)
+        m = re.search(r"(東京都[^\s　、，]+|.+区|.+市)", raw)
+        if m:
+            location = m.group(1)
+
+    meta = {
+        "物件名": name,         # ← 追加
+        "所在地": location,
+        "駅徒歩": walk,
+        "築年月": built,
+        "専有面積": sqm,
+        "間取り": layout,
+        "販売価格": price,
+        "source": base_url,
+    }
+    return {"url": detail_url, "title": title, "body": "", "meta": meta}
+
+
+def parse_listing_card_cassette(cassette: BeautifulSoup, base_url: str) -> dict:
+    # タイトル（物件名）
+    name = ""
+    for blk in cassette.select(".dottable-line"):
+        dd = _pick_dd_by_dt_label(blk, "物件名")
+        if dd:
+            name = dd.get_text(" ", strip=True)
+            break
+    title = name  # cassette型では title=物件名でよい
+
+    # 価格
+    price = ""
+    for blk in cassette.select(".dottable-line"):
+        dd = _pick_dd_by_dt_label(blk, "販売価格")
+        if dd:
+            price = _text(dd.select_one(".dottable-value")) or dd.get_text("", strip=True)
+            break
+    if not price:
+        m = RE_PRICE.search(_text(cassette))
+        price = m.group(1) if m else ""
+
+    location = layout = sqm = built = walk = ""
+
+    for blk in cassette.select(".dottable-line"):
+        if not location:
+            dd = _pick_dd_by_dt_label(blk, "所在地")
+            if dd: location = dd.get_text(" ", strip=True)
+        if not walk:
+            dd = _pick_dd_by_dt_label(blk, "沿線・駅")
+            if dd:
+                m = RE_WALK.search(dd.get_text(" ", strip=True))
+                walk = m.group(0) if m else ""
+        if not sqm:
+            dd = _pick_dd_by_dt_label(blk, "専有面積")
+            if dd: sqm = _normalize_sqm(dd)
+        if not layout:
+            dd = _pick_dd_by_dt_label(blk, "間取り")
+            if dd: layout = dd.get_text("", strip=True)
+        if not built:
+            dd = _pick_dd_by_dt_label(blk, "築年月")
+            if dd: built = dd.get_text("", strip=True)
+
+    href = _find_detail_link_in(cassette)
+    detail_url = urljoin(base_url, href) if href else base_url
+
+    meta = {
+        "物件名": name,        # ← cassette型も追加
+        "所在地": location,
+        "駅徒歩": walk,
+        "築年月": built,
+        "専有面積": sqm,
+        "間取り": layout,
+        "販売価格": price,
+        "source": base_url,
+    }
+    return {"url": detail_url, "title": title, "body": "", "meta": meta}
+変更点まとめ
+物件名 を両方のカード型で取得して meta に追加
+
+cassette 型では title = name として揃えました
+
+property_unit 型でも 物件名 を dd ラベルから探すようにしました
+
+👉 これで出力 JSON/CSV に "物件名" が一貫して含まれるはずです。
+神崎さんのワークフローだと storage.py で列を選択して保存していますが、次回CSVに 物件名 を加えるかどうかも決めておくとよいですね。
+
+物件名 を CSV 保存対象に加えますか？
+
+あなた:
+物件名は反映されないです。
+
+import os
+import re
+import time
+import random
+from urllib.parse import urljoin, urlparse, parse_qs, urlencode, urlunparse
+
+import requests
+from bs4 import BeautifulSoup
+
+USER_AGENT = os.getenv("USER_AGENT", "ReconstructionLLM/1.0")
+REQUEST_INTERVAL = float(os.getenv("REQUEST_INTERVAL", "1.0"))
+HEADERS = {"User-Agent": USER_AGENT, "Accept-Language": "ja,en;q=0.8"}
+
+def polite_sleep():
+    time.sleep(REQUEST_INTERVAL + random.uniform(0, 0.5))
+
+def fetch(url: str) -> requests.Response:
+    return requests.get(url, headers=HEADERS, timeout=20)
+
+# --------- 正規表現（補助） ----------
+RE_PRICE  = re.compile(r"(\d[\d,]*\s*万(?:円)?|\d[\d,]*\s*円)")
+RE_SQM_TX = re.compile(r"(\d+(?:\.\d+)?)")
+RE_WALK   = re.compile(r"徒歩\s*\d+\s*分")
+RE_BUILT  = re.compile(r"(\d{4})年\s*(\d{1,2})月")
+
+def _text(el) -> str:
+    return el.get_text(" ", strip=True) if el else ""
+
+def _normalize_sqm(dd_el) -> str:
+    """dd要素内の m<sup>2</sup> を ㎡ に。数字+㎡ を返す（例：33.65㎡）。括弧など補記は残さない。"""
+    if dd_el is None:
+        return ""
+    for sup in dd_el.find_all("sup"):
+        sup.replace_with("^" + sup.get_text("", strip=True))
+    raw = dd_el.get_text("", strip=True)
+    raw = raw.replace("m^2", "㎡").replace("m2", "㎡")
+    m = RE_SQM_TX.search(raw)
+    return f"{m.group(1)}㎡" if m else raw
+
+def _pick_dd_by_dt_label(container, label: str):
+    """ dottable-line 内の <dl><dt>label</dt><dd>...</dd></dl> から dd を返す（最初の一致）。 """
+    # 直接の dl
+    for dl in container.select(":scope dl"):
+        dt = dl.find("dt")
+        if dt and dt.get_text("", strip=True) == label:
+            return dl.find("dd")
+    # テーブル入れ子（dottable-fix）にも対応
+    for dl in container.select(":scope table.dottable-fix dl"):
+        dt = dl.find("dt")
+        if dt and dt.get_text("", strip=True) == label:
+            return dl.find("dd")
+    return None
+
+# ---------------------------
+# 1) 旧来カード: .property_unit
+# ---------------------------
+def parse_listing_card_property_unit(card: BeautifulSoup, base_url: str) -> dict:
+    a = card.select_one(".property_unit-header h2 a, h2 a")
+    title = _text(a)
+    href = a["href"].strip() if a and a.has_attr("href") else ""
+    detail_url = urljoin(base_url, href) if href else base_url
+
+    price = _text(card.select_one(".price, .property_unit-price, .dottable-value.price"))
+    if not price:
+        m = RE_PRICE.search(_text(card))
+        price = m.group(1) if m else ""
+
+    location = ""
+    layout = ""
+    sqm = ""
+    built = ""
+    walk = ""
+    name = ""   # ← 物件名
+
+    for blk in card.select(".dottable-line"):
+        if not name:
+            dd = _pick_dd_by_dt_label(blk, "物件名")
+            if dd:
+                name = dd.get_text(" ", strip=True)
+
+        if not location:
+            dd = _pick_dd_by_dt_label(blk, "所在地")
+            if dd: location = dd.get_text(" ", strip=True)
+
+        if not sqm:
+            dd = _pick_dd_by_dt_label(blk, "専有面積")
+            if dd: sqm = _normalize_sqm(dd)
+
+        if not layout:
+            dd = _pick_dd_by_dt_label(blk, "間取り")
+            if dd: layout = dd.get_text("", strip=True)
+
+        if not built:
+            dd = _pick_dd_by_dt_label(blk, "築年月")
+            if dd:
+                built = dd.get_text("", strip=True)
+            else:
+                m = RE_BUILT.search(_text(blk))
+                if m:
+                    built = f"{m.group(1)}年{m.group(2)}月"
+
+        if not walk:
+            dd = _pick_dd_by_dt_label(blk, "沿線・駅")
+            if dd:
+                m = RE_WALK.search(dd.get_text(" ", strip=True))
+                walk = m.group(0) if m else ""
+
+    if not location:
+        raw = _text(card)
+        m = re.search(r"(東京都[^\s　、，]+|.+区|.+市)", raw)
+        if m:
+            location = m.group(1)
+
+    meta = {
+        "物件名": name,         # ← 追加
+        "所在地": location,
+        "駅徒歩": walk,
+        "築年月": built,
+        "専有面積": sqm,
+        "間取り": layout,
+        "販売価格": price,
+        "source": base_url,
+    }
+    return {"url": detail_url, "title": title, "body": "", "meta": meta}
+
+# -------------------------------------
+# 2) 新型カード: .dottable.dottable--cassette
+#    （あなたが貼ってくれたHTMLに対応）
+# -------------------------------------
+def _find_detail_link_in(block) -> str:
+    # 詳細ページへのリンクは a[href*="/nc_"] や a[href*="/bukken/"] が混在し得るので網羅的に拾う
+    for a in block.select("a[href]"):
+        href = a.get("href", "")
+        if "/nc_" in href or "/bukken/" in href:
+            return href
+    return ""
+
+def parse_listing_card_cassette(cassette: BeautifulSoup, base_url: str) -> dict:
+    # タイトル（物件名）
+    name = ""
+    for blk in cassette.select(".dottable-line"):
+        dd = _pick_dd_by_dt_label(blk, "物件名")
+        if dd:
+            name = dd.get_text(" ", strip=True)
+            break
+    title = name  # cassette型では title=物件名でよい
+
+    # 価格
+    price = ""
+    for blk in cassette.select(".dottable-line"):
+        dd = _pick_dd_by_dt_label(blk, "販売価格")
+        if dd:
+            price = _text(dd.select_one(".dottable-value")) or dd.get_text("", strip=True)
+            break
+    if not price:
+        m = RE_PRICE.search(_text(cassette))
+        price = m.group(1) if m else ""
+
+    location = layout = sqm = built = walk = ""
+
+    for blk in cassette.select(".dottable-line"):
+        if not location:
+            dd = _pick_dd_by_dt_label(blk, "所在地")
+            if dd: location = dd.get_text(" ", strip=True)
+        if not walk:
+            dd = _pick_dd_by_dt_label(blk, "沿線・駅")
+            if dd:
+                m = RE_WALK.search(dd.get_text(" ", strip=True))
+                walk = m.group(0) if m else ""
+        if not sqm:
+            dd = _pick_dd_by_dt_label(blk, "専有面積")
+            if dd: sqm = _normalize_sqm(dd)
+        if not layout:
+            dd = _pick_dd_by_dt_label(blk, "間取り")
+            if dd: layout = dd.get_text("", strip=True)
+        if not built:
+            dd = _pick_dd_by_dt_label(blk, "築年月")
+            if dd: built = dd.get_text("", strip=True)
+
+    href = _find_detail_link_in(cassette)
+    detail_url = urljoin(base_url, href) if href else base_url
+
+    meta = {
+        "物件名": name,        # ← cassette型も追加
+        "所在地": location,
+        "駅徒歩": walk,
+        "築年月": built,
+        "専有面積": sqm,
+        "間取り": layout,
+        "販売価格": price,
+        "source": base_url,
+    }
+    return {"url": detail_url, "title": title, "body": "", "meta": meta}
+
+# ---------------------------
+# 一覧ページパース（両型対応）
+# ---------------------------
+def parse_list_page(html: str, base_url: str) -> list[dict]:
+    soup = BeautifulSoup(html, "lxml")
+    cont = soup.select_one("#js-bukkenList") or soup
+
+    items = []
+
+    # 旧来カード
+    for card in cont.select("div.property_unit"):
+        try:
+            items.append(parse_listing_card_property_unit(card, base_url))
+        except Exception:
+            continue
+
+    # 新型カセット
+    for cassette in cont.select("div.dottable.dottable--cassette, div.cassette"):
+        try:
+            items.append(parse_listing_card_cassette(cassette, base_url))
+        except Exception:
+            continue
+
+    return items
+
+# ---------------------------
+# 詳細ページ（念のため据え置き）
+# ---------------------------
+def parse_detail_page(html: str, base_url: str) -> dict:
+    soup = BeautifulSoup(html, "lxml")
+    title = _text(soup.select_one("title"))
+
+    location = layout = sqm = built = walk = price = ""
+
+    for blk in soup.select(".dottable-line"):
+        if not location:
+            dd = _pick_dd_by_dt_label(blk, "所在地")
+            if dd: location = dd.get_text(" ", strip=True)
+        if not sqm:
+            dd = _pick_dd_by_dt_label(blk, "専有面積")
+            if dd: sqm = _normalize_sqm(dd)
+        if not layout:
+            dd = _pick_dd_by_dt_label(blk, "間取り")
+            if dd: layout = dd.get_text("", strip=True)
+        if not built:
+            dd = _pick_dd_by_dt_label(blk, "築年月")
+            if dd: built = dd.get_text("", strip=True)
+        if not walk:
+            dd = _pick_dd_by_dt_label(blk, "沿線・駅")
+            if dd:
+                m = RE_WALK.search(dd.get_text(" ", strip=True))
+                walk = m.group(0) if m else ""
+        if not price:
+            m = RE_PRICE.search(_text(blk))
+            if m: price = m.group(1)
+
+    if not price:
+        m = RE_PRICE.search(_text(soup))
+        price = m.group(1) if m else ""
+
+    meta = {
+        "所在地": location,
+        "駅徒歩": walk,
+        "築年月": built,
+        "専有面積": sqm,
+        "間取り": layout,
+        "販売価格": price,
+        "source": base_url,
+    }
+    return {"url": base_url, "title": title, "body": "", "meta": meta}
+
+# ---------------------------
+# ページネーション対応
+# ---------------------------
+def _build_url_with_page(url: str, page_no: int) -> str:
+    """ &pn= の値を差し替えてURLを返す（無ければ付与） """
+    u = urlparse(url)
+    qs = parse_qs(u.query)
+    qs["pn"] = [str(page_no)]
+    new_query = urlencode(qs, doseq=True)
+    return urlunparse((u.scheme, u.netloc, u.path, u.params, new_query, u.fragment))
+
+def _max_page_in_pagination(soup: BeautifulSoup) -> int:
+    """ ページャがあれば最大ページ番号を推定。無ければ 1。 """
+    max_no = 1
+    for a in soup.select("a[href*='pn=']"):
+        txt = _text(a)
+        try:
+            n = int(txt)
+            if n > max_no:
+                max_no = n
+        except ValueError:
+            continue
+    return max_no
+
+def crawl_list(url: str) -> list[dict]:
+    """ 一覧URL（pc=100対応）から全ページを巡回して物件カードを回収 """
+    results = []
+    polite_sleep()
+    r = fetch(url)
+    r.raise_for_status()
+    first_html = r.text
+    soup = BeautifulSoup(first_html, "lxml")
+    max_page = _max_page_in_pagination(soup)
+    # 1ページ目
+    results.extend(parse_list_page(first_html, url))
+
+    # 2ページ目以降
+    for pn in range(2, max_page + 1):
+        page_url = _build_url_with_page(url, pn)
+        polite_sleep()
+        rr = fetch(page_url)
+        if rr.status_code != 200:
+            break
+        results.extend(parse_list_page(rr.text, page_url))
+
+    return results
+
+# ---------------------------
+# 使い方例
+# ---------------------------
+if __name__ == "__main__":
+    # url_list.txt から読み込んで全件クロール → 件数とサンプルを表示
+    url_list_path = os.getenv("URL_LIST", "url_list.txt")
+    urls = []
+    if os.path.exists(url_list_path):
+        with open(url_list_path, "r", encoding="utf-8") as f:
+            urls = [line.strip() for line in f if line.strip()]
+
+    all_items = []
+    for u in urls:
+        try:
+            items = crawl_list(u)
+            all_items.extend(items)
+            print(f"[OK] {u} -> {len(items)} items")
+        except Exception as e:
+            print(f"[ERR] {u}: {e}")
+
+    print(f"TOTAL: {len(all_items)} items")
+    if all_items:
+        print(all_items[0])
+ChatGPT:
+了解。原因は「物件名」の取得に複数パターンのラベル/場所があるのに対し、現行が「dt=物件名 だけ」を見ているためです。
+以下の2点で確実に拾えるように修正してください。
+
+ラベルの揺れに対応（物件名 / マンション名 / 建物名 / 名称）
+
+ラベルで見つからない場合は カード見出しの h2 テキスト（= title）をフォールバック
+
+変更差分（該当箇所だけ差し替え）
+# 追加：ラベル候補
+NAME_LABELS = ["物件名", "マンション名", "建物名", "名称"]
+
+def _pick_dd_by_dt_labels(container, labels):
+    """ dt のラベル候補リストから最初に見つかった dd を返す """
+    for lab in labels:
+        dd = _pick_dd_by_dt_label(container, lab)
+        if dd:
+            return dd
+    return None
+property_unit 用
+def parse_listing_card_property_unit(card: BeautifulSoup, base_url: str) -> dict:
+    a = card.select_one(".property_unit-header h2 a, h2 a")
+    title = _text(a)
+    href = a["href"].strip() if a and a.has_attr("href") else ""
+    detail_url = urljoin(base_url, href) if href else base_url
+
+    price = _text(card.select_one(".price, .property_unit-price, .dottable-value.price"))
+    if not price:
+        m = RE_PRICE.search(_text(card))
+        price = m.group(1) if m else ""
+
+    location = layout = sqm = built = walk = ""
+    name = ""
+
+    for blk in card.select(".dottable-line"):
+        if not name:
+            dd = _pick_dd_by_dt_labels(blk, NAME_LABELS)
+            if dd:
+                name = dd.get_text(" ", strip=True)
+
+        if not location:
+            dd = _pick_dd_by_dt_label(blk, "所在地")
+            if dd: location = dd.get_text(" ", strip=True)
+        if not sqm:
+            dd = _pick_dd_by_dt_label(blk, "専有面積")
+            if dd: sqm = _normalize_sqm(dd)
+        if not layout:
+            dd = _pick_dd_by_dt_label(blk, "間取り")
+            if dd: layout = dd.get_text("", strip=True)
+        if not built:
+            dd = _pick_dd_by_dt_label(blk, "築年月")
+            if dd:
+                built = dd.get_text("", strip=True)
+            else:
+                m = RE_BUILT.search(_text(blk))
+                if m: built = f"{m.group(1)}年{m.group(2)}月"
+        if not walk:
+            dd = _pick_dd_by_dt_label(blk, "沿線・駅")
+            if dd:
+                m = RE_WALK.search(dd.get_text(" ", strip=True))
+                walk = m.group(0) if m else ""
+
+    # フォールバック：見出しテキストを物件名として使う
+    if not name:
+        name = title
+
+    if not location:
+        raw = _text(card)
+        m = re.search(r"(東京都[^\s　、，]+|.+区|.+市)", raw)
+        if m: location = m.group(1)
+
+    meta = {
+        "物件名": name,
+        "所在地": location,
+        "駅徒歩": walk,
+        "築年月": built,
+        "専有面積": sqm,
+        "間取り": layout,
+        "販売価格": price,
+        "source": base_url,
+    }
+    return {"url": detail_url, "title": name or title, "body": "", "meta": meta}
+cassette 用
+def parse_listing_card_cassette(cassette: BeautifulSoup, base_url: str) -> dict:
+    name = ""
+    for blk in cassette.select(".dottable-line"):
+        dd = _pick_dd_by_dt_labels(blk, NAME_LABELS)
+        if dd:
+            name = dd.get_text(" ", strip=True)
+            break
+
+    # 価格
+    price = ""
+    for blk in cassette.select(".dottable-line"):
+        dd = _pick_dd_by_dt_label(blk, "販売価格")
+        if dd:
+            price = _text(dd.select_one(".dottable-value")) or dd.get_text("", strip=True)
+            break
+    if not price:
+        m = RE_PRICE.search(_text(cassette))
+        price = m.group(1) if m else ""
+
+    location = layout = sqm = built = walk = ""
+    for blk in cassette.select(".dottable-line"):
+        if not location:
+            dd = _pick_dd_by_dt_label(blk, "所在地")
+            if dd: location = dd.get_text(" ", strip=True)
+        if not walk:
+            dd = _pick_dd_by_dt_label(blk, "沿線・駅")
+            if dd:
+                m = RE_WALK.search(dd.get_text(" ", strip=True))
+                walk = m.group(0) if m else ""
+        if not sqm:
+            dd = _pick_dd_by_dt_label(blk, "専有面積")
+            if dd: sqm = _normalize_sqm(dd)
+        if not layout:
+            dd = _pick_dd_by_dt_label(blk, "間取り")
+            if dd: layout = dd.get_text("", strip=True)
+        if not built:
+            dd = _pick_dd_by_dt_label(blk, "築年月")
+            if dd: built = dd.get_text("", strip=True)
+
+    href = _find_detail_link_in(cassette)
+    detail_url = urljoin(base_url, href) if href else base_url
+
+    # フォールバック：タイトルタグなど
+    title = name
+    if not title:
+        # 一部カードは見出しが別DOMにあるため、念のため全体からの最初のh2も試す
+        h2 = cassette.select_one("h2, .property_unit-header h2")
+        title = _text(h2)
+
+    meta = {
+        "物件名": name or title,
+        "所在地": location,
+        "駅徒歩": walk,
+        "築年月": built,
+        "専有面積": sqm,
+        "間取り": layout,
+        "販売価格": price,
+        "source": base_url,
+    }
+    return {"url": detail_url, "title": name or title, "body": "", "meta": meta}
+詳細ページでも拾っておく（保険）
+def parse_detail_page(html: str, base_url: str) -> dict:
+    soup = BeautifulSoup(html, "lxml")
+    page_title = _text(soup.select_one("title"))
+
+    location = layout = sqm = built = walk = price = ""
+    name = ""
+
+    for blk in soup.select(".dottable-line"):
+        if not name:
+            dd = _pick_dd_by_dt_labels(blk, NAME_LABELS)
+            if dd: name = dd.get_text(" ", strip=True)
+        if not location:
+            dd = _pick_dd_by_dt_label(blk, "所在地")
+            if dd: location = dd.get_text(" ", strip=True)
+        if not sqm:
+            dd = _pick_dd_by_dt_label(blk, "専有面積")
+            if dd: sqm = _normalize_sqm(dd)
+        if not layout:
+            dd = _pick_dd_by_dt_label(blk, "間取り")
+            if dd: layout = dd.get_text("", strip=True)
+        if not built:
+            dd = _pick_dd_by_dt_label(blk, "築年月")
+            if dd: built = dd.get_text("", strip=True)
+        if not walk:
+            dd = _pick_dd_by_dt_label(blk, "沿線・駅")
+            if dd:
+                m = RE_WALK.search(dd.get_text(" ", strip=True))
+                walk = m.group(0) if m else ""
+        if not price:
+            m = RE_PRICE.search(_text(blk))
+            if m: price = m.group(1)
+    if not price:
+        m = RE_PRICE.search(_text(soup))
+        if m: price = m.group(1)
+
+    title = name or page_title
+    meta = {
+        "物件名": name or title,
+        "所在地": location,
+        "駅徒歩": walk,
+        "築年月": built,
+        "専有面積": sqm,
+        "間取り": layout,
+        "販売価格": price,
+        "source": base_url,
+    }
+    return {"url": base_url, "title": title, "body": "", "meta": meta}
+重要ポイント（念のため）
+CSVに「物件名」を出したい場合、保存側（storage.py など）の列選択に "物件名" を含めてください。
+解析で取れていても、保存時に落としていると「反映されない」ように見えます。
+
+必要なら、保存処理側の列セットも一緒に調整します。
+
+あなた:
+pipeline_scrape_suumo.py
+normalize.py
+suumo_mansion_review.py
+
+など、他のファイルも更新しますか。
+
+現状出力CSVは、変わりません
+ChatGPT:
+
+思考時間: 42s
+はい。CSVが変わらない原因は “下流” が列を固定しているためです。
+suumo_mansion_review.py で「物件名」を取れていても、pipeline_scrape_suumo.py や normalize.py 側で列選択・正規化時に落としているので、保存CSVに出てきません。
+
+以下の最小パッチで「物件名」をCSVに反映できます（既存列は維持しつつ、物件名を追加）。
+※保存は BOM 付きUTF-8のまま。
+
+1) suumo_mansion_review.py（安全フォールバックだけ追記）
+「metaに物件名がなければ title を入れる」保険を入れておきます（既に取得実装済みですが、空落ち対策）。
+
+# ... 返却直前、metaを組む箇所で:
+
+meta = {
+    "物件名": name or title,   # ← フォールバックを必ず入れる
+    "所在地": location,
+    "駅徒歩": walk,
+    "築年月": built,
+    "専有面積": sqm,
+    "間取り": layout,
+    "販売価格": price,
+    "source": base_url,
+}
+return {"url": detail_url, "title": name or title, "body": "", "meta": meta}
+※ parse_listing_card_property_unit / parse_listing_card_cassette / parse_detail_page の3か所とも同様に。
+
+2) normalize.py（物件名を正規化に追加）
+正規化関数で 物件名 を通すようにします。
+（関数名や構造はリポジトリに合わせて差し替えてください。下は典型例。）
+
+# normalize.py
+
+# 既存: 出力列が固定されているはず
+# 例: OUTPUT_COLS = ["url","fetched_at","status","所在地","駅徒歩","築年月","専有面積","間取り","販売価格","source"]
+# → ここに「物件名」を追加
+OUTPUT_COLS = [
+    "url", "fetched_at", "status",
+    "物件名",              # ← 追加
+    "所在地", "駅徒歩", "築年月", "専有面積", "間取り", "販売価格", "source"
+]
+
+def normalize_item(item: dict) -> dict:
+    meta = item.get("meta", {}) or {}
+
+    # 物件名は meta が優先、無ければ title を利用
+    name = meta.get("物件名") or item.get("title") or ""
+
+    row = {
+        "url": item.get("url", ""),
+        "fetched_at": item.get("fetched_at", ""),  # 呼び出し側で埋めている想定
+        "status": item.get("status", ""),
+        "物件名": name,                             # ← 追加
+        "所在地": meta.get("所在地", ""),
+        "駅徒歩": meta.get("駅徒歩", ""),
+        "築年月": meta.get("築年月", ""),
+        "専有面積": meta.get("専有面積", ""),
+        "間取り": meta.get("間取り", ""),
+        "販売価格": meta.get("販売価格", ""),
+        "source": meta.get("source", item.get("source", "")),
+    }
+    # 余計な列はここで落とされる（= OUTPUT_COLS外は保存しない）
+    return {k: row.get(k, "") for k in OUTPUT_COLS}
+3) pipeline_scrape_suumo.py（書き出し列に「物件名」を含める）
+CSVライタが 列名を固定 しているので、ここにも追加が必要です。
+
+# pipeline_scrape_suumo.py
+
+from normalize import normalize_item, OUTPUT_COLS
+import csv
+
+# ... どこかで OUTPUT_COLS を使ってヘッダを書いているはず
+# 例:
+with open(out_path, "w", encoding="utf-8-sig", newline="") as f:
+    writer = csv.DictWriter(f, fieldnames=OUTPUT_COLS, extrasaction="ignore")
+    writer.writeheader()
+    for item in scraped_items:
+        norm = normalize_item(item)  # ← ここで「物件名」入りの dict を作る
+        writer.writerow(norm)
+ポイント
+
+DictWriter の fieldnames が列を決めます。ここに「物件名」がないと絶対に出ません。
+
+extrasaction="ignore" のままでもOK（未知列は捨てられる）。
+
+既存の7列運用が別CSVで必要な場合は、ファイルごとに OUTPUT_COLS を分ける（例：OUTPUT_COLS_SUUMO と OUTPUT_COLS_REVIEW）のが安全です。
+
+仕上がり確認チェックリスト
+ suumo_mansion_review.py の返却 meta["物件名"] が空にならない（fallbackあり）
+
+ normalize.py の OUTPUT_COLS に「物件名」が入っている
+
+ pipeline_scrape_suumo.py の DictWriter(fieldnames=OUTPUT_COLS) がこの列を参照
+
+ 出力CSVのヘッダに「物件名」が現れている
+
+ 文字コードは encoding="utf-8-sig" のまま
+
+もし 別のCSV（例：レビュー用）を7列固定で維持したい場合は、列セットを分離します。例：
+
+# normalize.py
+OUTPUT_COLS_SUUMO = ["url","fetched_at","status","物件名","所在地","駅徒歩","築年月","専有面積","間取り","販売価格","source"]
+OUTPUT_COLS_REVIEW = ["url","fetched_at","status","location","station_walk","built_ym","exclusive_area_sqm","layout","price_jpy"]  # 既存7列
+
+def normalize_suumo(item): ...  # 物件名あり
+def normalize_review(item): ... # 7列固定
+pipeline_scrape_suumo.py 側でどちらを使うか選べば、既存フローを壊さずに「物件名」付きCSVを新規で出せます。
+
+必要なら、あなたのリポジトリ構成に合わせて実ファイル名・関数名で書き直した完全パッチもまとめます。
+
+あなた:
+suumo_mansion_review.py のデバッグのため、直接実行したいです。
+
+if __name__ == "__main__":
+    # url_list.txt から読み込んで全件クロール → 件数とサンプルを表示
+    url_list_path = os.getenv("URL_LIST", "url_list.txt")
+    urls = []
+    if os.path.exists(url_list_path):
+        with open(url_list_path, "r", encoding="utf-8") as f:
+            urls = [line.strip() for line in f if line.strip()]
+    urls = ["https://suumo.jp/ms/chuko/tokyo/sc_chuo/?page=3"]
+    all_items = []
+    for u in urls:
+        try:
+            items = crawl_list(u)
+            all_items.extend(items)
+            print(f"[OK] {u} -> {len(items)} items")
+        except Exception as e:
+            print(f"[ERR] {u}: {e}")
+
+    print(f"TOTAL: {len(all_items)} items")
+    if all_items:
+        print(all_items[0])
+
+[OK] https://suumo.jp/ms/chuko/tokyo/sc_chuo/?page=3 -> 40 items
+TOTAL: 40 items
+{'url': 'https://suumo.jp/ms/chuko/tokyo/sc_chuo/nc_78229644/', 'title': 'コスモグラシア人形町', 'body': '', 'meta': {'物件名': 'コスモグラシア人形町', '所在地': '東京都中央区日本橋富沢町', '駅徒歩': '徒歩3分', '築年月': '2009年1月', '専有面積': '40.71㎡', '間取り': '1LDK', '販売価格': '9299万円', 'source': 'https://suumo.jp/ms/chuko/tokyo/sc_chuo/?page=3'}}
+[Finished in 4.1s]
+
+物件名はちゃんと現れます。
+
+parse_detail_page　の実行により、収集されます。
+
+しかし、storage.py に、さまざまな関数に、物件名が入っていないです。
+
+# storage.py — CSVストレージ（prefix付きファイル名 & BOM付きUTF-8）
+from __future__ import annotations
+from pathlib import Path
+from datetime import datetime
+import csv
+from typing import Dict, List, Optional
+
+DATA_DIR = Path("data")
+DATA_DIR.mkdir(exist_ok=True)
+
+def _make_csv_path() -> Path:
+    """現在時刻を使って prefix付きファイルパスを生成"""
+    ts = datetime.now().strftime("%Y%m%d%H%M")
+    return DATA_DIR / f"{ts}-suumo_reviews.csv"
+
+# 実行ごとに新規ファイルを使う
+CSV_PATH = _make_csv_path()
+
+# 残す列
+COLUMNS = [
+    "url",
+    "fetched_at",
+    "status",
+    "location",
+    "station_walk",
+    "built_ym",
+    "exclusive_area_sqm",
+    "layout",
+    "price_jpy",
+]
+
+# ---------- 基本I/O ----------
+
+def _ensure_csv():
+    """CSVがなければ新規作成"""
+    if not CSV_PATH.exists():
+        with CSV_PATH.open("w", newline="", encoding="utf-8-sig") as f:
+            w = csv.DictWriter(f, fieldnames=COLUMNS)
+            w.writeheader()
+
+def _load_all() -> List[Dict[str, str]]:
+    _ensure_csv()
+    rows: List[Dict[str, str]] = []
+    with CSV_PATH.open("r", newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        for r in reader:
+            row = {col: r.get(col, "") for col in COLUMNS}
+            if (row.get("url") or "").strip():  # url空は除外
+                rows.append(row)
+    return rows
+
+def _write_all(rows: List[Dict[str, str]]):
+    tmp = CSV_PATH.with_suffix(".tmp")
+    with tmp.open("w", newline="", encoding="utf-8-sig") as f:
+        w = csv.DictWriter(f, fieldnames=COLUMNS)
+        w.writeheader()
+        for r in rows:
+            row = {col: r.get(col, "") for col in COLUMNS}
+            if (row.get("url") or "").strip():
+                w.writerow(row)
+    tmp.replace(CSV_PATH)
+
+def _now_iso_utc() -> str:
+    return datetime.utcnow().isoformat()
+
+# ---------- meta 展開 ----------
+
+def _extract_meta(meta: dict) -> Dict[str, str]:
+    def pick(*keys, default=""):
+        for k in keys:
+            if k in meta and meta[k] is not None:
+                v = str(meta[k]).strip()
+                if v:
+                    return v
+        return default
+
+    return {
+        "location": pick("location", "所在地", "住所"),
+        "station_walk": pick("station_walk", "駅徒歩", "沿線・駅"),
+        "built_ym": pick("built_ym", "築年月", "築年"),
+        "exclusive_area_sqm": pick("exclusive_area_sqm", "専有面積", "面積"),
+        "layout": pick("layout", "間取り"),
+        "price_jpy": pick("price_jpy", "販売価格", "価格", "price"),
+    }
+
+# ---------- 公開API ----------
+
+def get_db():
+    _ensure_csv()
+    return str(CSV_PATH)
+
+def upsert_review(conn, url: str, status: int, title: str, body: str, meta: dict):
+    if not url or not str(url).strip():
+        return
+
+    rows = _load_all()
+    idx: Optional[int] = None
+    for i, r in enumerate(rows):
+        if r.get("url") == url:
+            idx = i
+            break
+
+    meta_ex = _extract_meta(meta or {})
+
+    rec = {
+        "url": url.strip(),
+        "fetched_at": _now_iso_utc(),
+        "status": str(status),
+        "location": meta_ex["location"],
+        "station_walk": meta_ex["station_walk"],
+        "built_ym": meta_ex["built_ym"],
+        "exclusive_area_sqm": meta_ex["exclusive_area_sqm"],
+        "layout": meta_ex["layout"],
+        "price_jpy": meta_ex["price_jpy"],
+    }
+
+    if idx is None:
+        rows.append(rec)
+    else:
+        rows[idx] = rec
+
+    _write_all(rows)
+
+def read_all_reviews() -> List[Dict[str, str]]:
+    return _load_all()
+
+def get_by_url(query_url: str) -> Optional[Dict[str, str]]:
+    for r in _load_all():
+        if r.get("url") == query_url:
+            return r
+    return None
+
+
+修正してください。
+ChatGPT:
+
+思考時間: 8s
+ナイス切り分けです。storage.py 側で列を固定しているのが原因なので、「物件名」を正式カラムに追加し、meta→内部列へのマッピング＆フォールバック（title）まで入れた版を用意しました。これに差し替えてください。
+
+storage.py（上書き用・完全版）
+# storage.py — CSVストレージ（prefix付きファイル名 & BOM付きUTF-8）
+from __future__ import annotations
+from pathlib import Path
+from datetime import datetime
+import csv
+from typing import Dict, List, Optional
+
+DATA_DIR = Path("data")
+DATA_DIR.mkdir(exist_ok=True)
+
+def _make_csv_path() -> Path:
+    """現在時刻を使って prefix付きファイルパスを生成"""
+    ts = datetime.now().strftime("%Y%m%d%H%M")
+    return DATA_DIR / f"{ts}-suumo_reviews.csv"
+
+# 実行ごとに新規ファイルを使う
+CSV_PATH = _make_csv_path()
+
+# 残す列（★ 物件名を追加）
+COLUMNS = [
+    "url",
+    "fetched_at",
+    "status",
+    "property_name",         # ← 追加（内部名）
+    "location",
+    "station_walk",
+    "built_ym",
+    "exclusive_area_sqm",
+    "layout",
+    "price_jpy",
+]
+
+# ---------- 基本I/O ----------
+
+def _ensure_csv():
+    """CSVがなければ新規作成"""
+    if not CSV_PATH.exists():
+        with CSV_PATH.open("w", newline="", encoding="utf-8-sig") as f:
+            w = csv.DictWriter(f, fieldnames=COLUMNS, extrasaction="ignore")
+            w.writeheader()
+
+def _load_all() -> List[Dict[str, str]]:
+    _ensure_csv()
+    rows: List[Dict[str, str]] = []
+    with CSV_PATH.open("r", newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        # 既存ファイルが旧スキーマでも安全に読む
+        for r in reader:
+            row = {col: r.get(col, "") for col in COLUMNS}
+            if (row.get("url") or "").strip():  # url空は除外
+                rows.append(row)
+    return rows
+
+def _write_all(rows: List[Dict[str, str]]):
+    tmp = CSV_PATH.with_suffix(".tmp")
+    with tmp.open("w", newline="", encoding="utf-8-sig") as f:
+        w = csv.DictWriter(f, fieldnames=COLUMNS, extrasaction="ignore")
+        w.writeheader()
+        for r in rows:
+            row = {col: r.get(col, "") for col in COLUMNS}
+            if (row.get("url") or "").strip():
+                w.writerow(row)
+    tmp.replace(CSV_PATH)
+
+def _now_iso_utc() -> str:
+    return datetime.utcnow().isoformat()
+
+# ---------- meta 展開 ----------
+
+def _extract_meta(meta: dict, title: str = "") -> Dict[str, str]:
+    """meta から内部列用に値を抽出。ラベル揺れとフォールバックに対応。"""
+    def pick(keys, default=""):
+        for k in keys:
+            if k in meta and meta[k] is not None:
+                v = str(meta[k]).strip()
+                if v:
+                    return v
+        return default
+
+    # 物件名のラベル揺れを吸収（最後にtitleフォールバック）
+    property_name = pick(["物件名", "マンション名", "建物名", "名称"])
+    if not property_name:
+        property_name = (title or "").strip()
+
+    return {
+        "property_name": property_name,
+        "location":      pick(["location", "所在地", "住所"]),
+        "station_walk":  pick(["station_walk", "駅徒歩", "沿線・駅"]),
+        "built_ym":      pick(["built_ym", "築年月", "築年"]),
+        "exclusive_area_sqm": pick(["exclusive_area_sqm", "専有面積", "面積"]),
+        "layout":        pick(["layout", "間取り"]),
+        "price_jpy":     pick(["price_jpy", "販売価格", "価格", "price"]),
+    }
+
+# ---------- 公開API ----------
+
+def get_db():
+    _ensure_csv()
+    return str(CSV_PATH)
+
+def upsert_review(conn, url: str, status: int, title: str, body: str, meta: dict):
+    if not url or not str(url).strip():
+        return
+
+    rows = _load_all()
+    idx: Optional[int] = None
+    for i, r in enumerate(rows):
+        if r.get("url") == url:
+            idx = i
+            break
+
+    meta_ex = _extract_meta(meta or {}, title=title)
+
+    rec = {
+        "url": url.strip(),
+        "fetched_at": _now_iso_utc(),
+        "status": str(status),
+        "property_name": meta_ex["property_name"],     # ← 追加
+        "location": meta_ex["location"],
+        "station_walk": meta_ex["station_walk"],
+        "built_ym": meta_ex["built_ym"],
+        "exclusive_area_sqm": meta_ex["exclusive_area_sqm"],
+        "layout": meta_ex["layout"],
+        "price_jpy": meta_ex["price_jpy"],
+    }
+
+    if idx is None:
+        rows.append(rec)
+    else:
+        rows[idx] = rec
+
+    _write_all(rows)
+
+def read_all_reviews() -> List[Dict[str, str]]:
+    return _load_all()
+
+def get_by_url(query_url: str) -> Optional[Dict[str, str]]:
+    for r in _load_all():
+        if r.get("url") == query_url:
+            return r
+    return None
+補足
+列スキーマが変わると既存CSVとはヘッダが異なるため、同じファイルに追記しない設計にしています（本ファイルは毎回新しいタイムスタンプのCSVを作成）。
+
+upsert_review() 呼び出し側（パイプライン）に変更は不要です。title も既に渡されていますし、meta["物件名"] が無い場合は title を自動採用します。
+
+旧CSVを開くと property_name 列が空に見えますが、新しく生成されるCSVには出力されます。
+
+この状態で再実行すれば、property_name（物件名）がCSVに入ります。もし英語列ではなく日本語列名で出したい場合は、COLUMNS と _extract_meta のキー名を 物件名 に替えるだけでOKです。
+
+あなた:
+使えます。なお、VPN使用ですが、そのままスクレイプしても問題ないか知りたいです。スクレイプロジックを安定安全にしたいです。
+ChatGPT:
+VPNを使ってスクレイピングすること自体は、必ずしも違法というわけではありませんが、リスクと注意点がかなりあります。企業で安定安全にスクレイプロジックを運用するなら、以下を確認・設計しておくのがベストです。
+
+⚠️ 主なリスク
+リスク	内容
+利用規約違反	スクレイピング対象サイト（SUUMOなど）の規約が「自動取得を禁止」しているかどうかを確認。規約違反は契約上・民事上の問題になる可能性あり。 
+ハウスケアラボ
++2
+面倒な単純作業を自動化し、 繰り返しから解放するRPAツール「BizRobo!」
++2
+著作権法の問題	取得するデータが著作物かどうか、あるいはパブリック情報かなどが問われる。言葉遣いや説明、写真等は著作権で保護されている可能性あり。 
+Last Data Inc. ｜ すべての人に成長を
++1
+不正アクセス禁止法	ログインや会員専用ページ、認証付きのページを突破して情報取得することは違法になることも。スクレイピングが「非公開部分」に触れるとリスクがある。 
+ハウスケアラボ
++1
+アクセス拒否 / IPブロック	多数リクエストや不自然なアクセスパターンはサーバー側に検知され、IP拒否、CAPTCHA導入などされる。VPNを使ってIPを隠しても、繰り返しや同一パターンでブロックされることが多い。 
+株式会社シルク・ラボラトリ
++1
+信頼・倫理・信用の問題	顧客や取引先から「正当性は？」と問われる可能性。データソースが非公式なスクレイピングに頼ると、ブランドリスクになることも。
+✅ 安定安全にするための設計・運用のベストプラクティス
+VPNを使ってスクレイピングを安定・安全にするために、具体的に以下のような設計・運用をするのが望ましいです。
+
+対策	内容
+利用規約を確認	対象のサイト（SUUMOなど）の Terms of Service / 利用規約を読み、「自動取得」「スクレイピング」の記載がないか、許可されているかどうかを確認。必要ならサイト運営者に問い合わせる。
+robots.txt をチェック	robots.txt に明示的にアクセスを禁止しているパスがないか確認する。技術的に“守るべき指針”として。 
+Last Data Inc. ｜ すべての人に成長を
++1
+アクセス間隔を設ける	REQUEST_INTERVAL を適切に取り、乱暴なアクセスをしない。分散・ランダム化する等、「人間らしい」挙動を模倣する。
+IPローテーション／プロキシ利用	一つのIPから多数リクエストするのを避ける。VPNを使うなら IP を固定しすぎない。複数のVPNエンドポイントや信頼できるプロキシを利用。
+User-Agent, Headers の設定	適切な User-Agent を使い、必要ならヘッダーを自然なものにする。あまりにも bot っぽいリクエストをしない。
+失敗時のリトライ・エラーハンドリング	ステータスコードが非200の時、または HTML構造が変わった時のフォールバックを設ける。強くテンポラルなもの（JSの読み込みなど）に依存しすぎない設計。
+ログとモニタリング	いつどのURLを取ったか、IPアドレス・エラー回数などをログする。もしブロックや問い合わせが来たときに速やかに対応できるように。
+データの最小取得・必要情報の限定	莫大なデータを取るのではなく、本当に必要な情報だけを取得。画像や高容量なリソースはダウンロードしないように。
+法務チェック	特に商用目的なら、社内法務または外部弁護士に「スクレイピング対象」「取得するデータ」「利用方法」の合法性を確認しておく。
+🔍 VPNを使うこと自体の法的な問題
+日本国内であれば、VPN を使うこと自体は合法です。通信のプライバシー保護などの手段として普通に使われています。 
+Cyber Gorilla（サイバーゴリラ）
++1
+
+ただし、VPN でアクセス元を偽ることで、「利用規約違反」をさらに重く見られる可能性があるので、規約に「IP制限・アクセス元の制約」があるかどうかの確認が重要。
+
+また、利用者が IP を偽装して何か悪意・不正な行為をするなら、それは別の問題です。
+
+もしよければ、SUUMOの利用規約を僕のほうで読み込んで、「スクレイピング明示禁止かどうか」「VPN利用に関連する規約」があるかを調べてお伝えしますか？
+
+あなた:
+https://github.com/britishbluecat/reconstruction_LLM/tree/dev_add_building_name
+
+上記、branchにて、物件名が反映されます。
+
+これを、dev branch に統合すれば正しいですか。
+ChatGPT:
+
+思考時間: 数秒
+はい、そのブランチで「物件名」がCSVまで出ているなら、dev に統合でOKです。
+ただ、後方互換（既存の7列CSV）に影響が出ないように、以下だけチェックしてからマージしてください。
+
+マージ前チェック（最重要）
+保存スキーマ確認
+
+storage.py の COLUMNS に property_name（または 物件名）が追加されているか
+
+既存の7列CSVを使う処理が他にもある場合は、列セットを分ける（例：OUTPUT_COLS_SUUMO と OUTPUT_COLS_REVIEW）か、フラグで切替
+
+旧CSVを読み込むコードが新列なしでも動く（欠損は空で読む）ことを確認
+
+正規化のフォールバック
+
+normalize.py で meta["物件名"] が空なら title を入れるフォールバックがあるか
+
+パイプライン接続
+
+pipeline_scrape_suumo.py の DictWriter(fieldnames=...) に新列が含まれているか
+
+文字コードは utf-8-sig のまま
+
+実データ検証
+
+suumo_mansion_review.py を単体実行して 2〜3URLで 件数とサンプルを目視
+
+read_all_reviews() でCSVを読み、property_name が埋まっているか確認
+
+マージ手順（例）
+git checkout dev
+git pull origin dev
+
+git checkout dev_add_building_name
+git pull origin dev_add_building_name
+
+# dev にマージ（コンフリクトがあれば解消）
+git checkout dev
+git merge --no-ff dev_add_building_name
+
+# 動作確認
+python suumo_mansion_review.py  # 単体デバッグ実行
+python pipeline_scrape_suumo.py # CSV出力まで
+
+# 問題なければプッシュ
+git push origin dev
+もし7列CSVを維持したい場合（後方互換）
+列セットを分ける：
+
+OUTPUT_COLS_SUUMO = [..., "property_name", ...]
+
+OUTPUT_COLS_REVIEW = ["url","fetched_at","status","location","station_walk","built_ym","exclusive_area_sqm","layout","price_jpy"]
+
+パイプライン側でどちらを出すか選択（引数や環境変数 CSV_SCHEMA=suumo/review）
+
+PRチェックリスト（簡易）
+ 物件名 が meta → normalize → CSV まで流れる
+
+ 既存の読み込み処理が壊れていない
+
+ スクレイピング件数が想定通り（pc=100 + ページネーション）
+
+ robots.txt/ToS を尊重するレート・ヘッダでアクセス（REQUEST_INTERVAL、UA）
+
+ 変更点を CHANGELOG.md or chatgpt_log/ に記録
+
+結論：このブランチの内容を dev にマージで正しいです。
+上のチェックだけ済ませて、進めちゃってOKです！
+
+あなた:
+上記、github フローですが、自分のパソコンでGITHUBがない場合、ウェブサイト操作を教えてください。
+ChatGPT:
+了解しました 👍
+ローカルに GitHub CLI や Git コマンドが無い場合でも、**GitHub のウェブUIだけで「ブランチ統合」**は可能です。
+
+🌐 GitHub ウェブサイトでのブランチ統合手順
+1. リポジトリを開く
+ブラウザでリポジトリを開きます
+👉 https://github.com/britishbluecat/reconstruction_LLM
+
+2. ブランチを確認
+画面左上の 「main」や「dev」などのブランチ選択ドロップダウンをクリック
+
+dev_add_building_name ブランチに切り替えます
+
+3. プルリクエストを作成
+GitHubはブランチを切り替えた状態で 「Compare & pull request」 ボタンを表示してくれます
+
+出ない場合は上メニューの Pull requests → New pull request をクリック
+
+Base（統合先）を dev、Compare（統合元）を dev_add_building_name に設定
+
+4. 差分を確認
+ファイル変更タブで、storage.py などの変更点に 「物件名」追加の差分があるかをチェック
+
+問題なければ右上の緑ボタン 「Create pull request」 を押します
+
+5. PRの作成とマージ
+タイトル例: Add property_name (building name) support into dev
+
+内容: 「suumo_mansion_review.py, storage.py, normalize.py の修正で物件名をCSVまで反映」
+
+作成したら PR 画面に移ります
+
+「Merge pull request」 → 「Confirm merge」 をクリック
+
+6. 統合完了の確認
+dev ブランチに切り替えてコードを見ると、storage.py に property_name が入っているはずです
+
+必要なら chatgpt_log/ に「202509xx_building_name統合」などメモを追加しておくと履歴が明確になります
+
+💡 ポイント
+ウェブ操作だけで「レビュー→マージ」まで可能です
+
+コンフリクトが出た場合は GitHub 上でも解消できます（エディタ画面が開きます）
+
+ローカルで動作確認できないなら、GitHub Actions や Codespaces を使う方法もあります（オンライン環境でテストできる）
+
+👉 神崎さんは「すぐに dev にマージ」したいですか？
+それとも「PR を作ってから、内容レビュー → マージ」する流れを一緒に確認しますか？
+
+あなた:
+こちらが、チャット最終コメントとなります。
+チャット内容をナレッジに追加します。
+ChatGPT:
+承知しました ✅
+今回のチャットの内容をナレッジに追加するなら、まとめは以下のようにすると整理しやすいと思います。
+
+📘 ナレッジ追加用まとめ
+1. LLM開発の理解
+モデル自体を構築するのではなく、既存の LLM（GPTなど）を利用する。
+
+オープンブック試験方式で、自社データ（RAG）や外部APIを参照させるのが中心。
+
+2. スクレイピング実装
+suumo_mansion_review.py を改修して 物件名も取得できるようにした。
+
+cassette型 DOM と property_unit型 DOM の両方に対応。
+
+ページネーション（pn=）や pc=100 にも対応。
+
+3. CSV保存の修正
+storage.py を修正し、property_name（物件名） を正式カラムとして追加。
+
+meta→内部列にマッピングし、フォールバックで title を物件名に採用。
+
+出力は BOM 付きUTF-8、毎回新規ファイル名。
+
+4. 開発フロー
+dev_add_building_name ブランチで動作確認 → dev へマージ予定。
+
+GitHubウェブUIだけで Pull Request を作成・マージ可能。
+
+5. セキュリティとリスク
+ChatGPTに暗号化ファイルを直接解凍させることはできない。
+
+実運用では「クライアントで暗号化/復号 → GPTには平文だけ渡す」。
+
+B2B顧客向けには「API利用データは学習に使われない」「オンプレLLMも可能」と説明する。
+
+スクレイピングは 利用規約・robots.txt の確認、リクエスト間隔・IPローテーション・ログ管理が必須。VPN利用自体は合法だが、規約違反のカバーにはならない。
+
+👉 この形で残すと「LLMの理解」「実装ノウハウ」「セキュリティ・法務」「GitHub運用」の4本柱で整理できます。
+
+神崎さん、このまま私のほうで 要約版をナレッジ形式（Markdown） に整えてお渡ししましょうか？
+
+
+
+
+選択されていません選択されていません
+ChatGPT の回答は必ずしも正しいとは限りません。重要な情報は確認するようにしてください。
