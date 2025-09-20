@@ -1,3 +1,5 @@
+#address_normalize_functions.py
+
 import pandas as pd
 import re
 from pathlib import Path
@@ -111,30 +113,50 @@ def normalize_exclusive_area(df: pd.DataFrame) -> pd.DataFrame:
         )
     return df
 
+
+
+# 範囲/列挙の区切り記号（全角半角いろいろ）
+_SEP_SPLIT_RE = re.compile(r"[～〜\-−ー~・／/]")
+
 def normalize_price(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
-    def parse_price(val: str):
-        if not isinstance(val, str):
+    def to_yen_first(part: str):
+        """
+        '1億8880万円' → 188800000
+        '8480万円'   → 84800000
+        マッチしなければ None
+        """
+        if not isinstance(part, str):
             return None
-        val = val.strip().replace(",", "").replace("円", "")
-
-        # 「〇億〇〇〇万」/「〇億」/「〇〇〇万」に対応
-        m = re.match(r"(?:(\d+)億)?(?:(\d+)万)?", val)
+        t = part.strip().replace(",", "").replace("円", "").replace("万円", "万")
+        m = re.match(r"^\s*(?:(\d+)億)?\s*(\d+)万", t)
         if m:
             oku = int(m.group(1)) if m.group(1) else 0
             man = int(m.group(2)) if m.group(2) else 0
             return oku * 100_000_000 + man * 10_000
+        # まれに「xxxxx円」だけの表記にフォールバック
+        m2 = re.match(r"^\s*(\d+)\s*円", t)
+        if m2:
+            return int(m2.group(1))
         return None
+
+    def parse_price(val: str):
+        if not isinstance(val, str):
+            return None
+        # 範囲・列挙は「左側（最初）」を採用
+        first = _SEP_SPLIT_RE.split(val)[0]
+        return to_yen_first(first)
 
     if "price_jpy" in df.columns:
         df["price_jpy"] = df["price_jpy"].astype(str).map(parse_price).astype("Int64")
 
-        # 0円は DROP。ただし NaN は残す（必要に応じてここで落としてもOK）
+        # 0円はDROP（NaNは保持）
         mask_keep = df["price_jpy"].isna() | (df["price_jpy"] != 0)
-        df = df[mask_keep].reset_index(drop=True)  # ★ここが重要
+        df = df[mask_keep].reset_index(drop=True)
 
     return df
+
 
 
 
@@ -271,3 +293,178 @@ def add_ward_city_and_city_town(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
+# --- ここから追記 ------------------------------------------------------------
+from typing import Iterable
+
+# data/<subdir>/*.csv を 1 本に結合して data/<subdir>.csv を吐き出す
+SUBDIRS = [
+    "kodate_model_chuko",
+    "kodate_model_shin",
+    "mansion_model_chuko",
+    "mansion_model_shin",
+    "tochi",
+]
+
+def _read_csv_safe(p: Path) -> pd.DataFrame:
+    """
+    すべて comma-delimited 前提。
+    文字コードは UTF-8 (BOM 付き/なし) を優先し、失敗時は fallback。
+    """
+    for enc in ("utf-8-sig", "utf-8"):
+        try:
+            return pd.read_csv(p, encoding=enc)
+        except UnicodeDecodeError:
+            continue
+    # 最後の手段
+    return pd.read_csv(p, encoding="cp932", errors="ignore")
+
+def build_folder_level_csvs() -> None:
+    """
+    data/<subdir>/*.csv を結合して data/<subdir>.csv を保存する。
+    - 区切りはカンマ（前提どおり）
+    - カラムはそのまま（統合時に union）
+    - 同一行の重複は簡易に drop_duplicates で除去
+    """
+    for sub in SUBDIRS:
+        src_dir = DATA_DIR / sub
+        if not src_dir.exists():
+            continue
+
+        csv_files = sorted(src_dir.glob("*.csv"))
+        if not csv_files:
+            # 空でも、空の CSV を吐いておくと後工程が楽
+            out = DATA_DIR / f"{sub}.csv"
+            if not out.exists():
+                pd.DataFrame().to_csv(out, index=False, encoding="utf-8-sig")
+            continue
+
+        dfs: list[pd.DataFrame] = []
+        for f in csv_files:
+            try:
+                df = _read_csv_safe(f)
+                dfs.append(df)
+            except Exception:
+                # 壊れたファイルはスキップ
+                continue
+
+        if not dfs:
+            out = DATA_DIR / f"{sub}.csv"
+            if not out.exists():
+                pd.DataFrame().to_csv(out, index=False, encoding="utf-8-sig")
+            continue
+
+        merged = pd.concat(dfs, ignore_index=True)
+        # 代表的な重複除去（URL があれば優先。なければ全カラムで）
+        if "url" in merged.columns:
+            merged = merged.drop_duplicates(subset=["url"], keep="last")
+        else:
+            merged = merged.drop_duplicates(keep="last")
+
+        out = DATA_DIR / f"{sub}.csv"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        merged.to_csv(out, index=False, encoding="utf-8-sig")
+
+def _list_folder_level_csvs() -> list[Path]:
+    """ build_folder_level_csvs 実行後に出来上がる 5 本だけを読む """
+    paths = [(DATA_DIR / f"{sub}.csv") for sub in SUBDIRS]
+    return [p for p in paths if p.exists()]
+# --- ここまで追記 ------------------------------------------------------------
+
+# === ここから追記: 住所→バウンディングボックス作成ユーティリティ ==================
+import pandas as pd
+import numpy as np
+import re
+from pathlib import Path
+
+# 丁目の正規化：末尾の「（漢数字/全角/半角）丁目」を安全に除去
+# 例: "麹町六丁目"→"麹町" / "永田町一丁目"→"永田町" / "六番町"→変化なし
+_RE_TRAILING_CHOME = re.compile(r"(.*?)([一二三四五六七八九十〇零百０-９0-9]+)?丁目$")
+
+def strip_chome(oaza_chome: str) -> str:
+    if not isinstance(oaza_chome, str):
+        return oaza_chome
+    oaza_chome = oaza_chome.strip()
+    m = _RE_TRAILING_CHOME.match(oaza_chome)
+    if m:
+        base = m.group(1).strip()
+        return base if base else oaza_chome
+    return oaza_chome
+
+from typing import Union, Optional
+
+def _to_decimal_tail(val: Union[float, str]) -> Optional[float]:
+    """
+    東京前提で 緯度:35.xxxxx 経度:139.xxxxx の小数部のみを使う。
+    例: 139.732787 -> 0.732787 / 35.687614 -> 0.687614
+    """
+    try:
+        f = float(val)
+    except Exception:
+        return None
+    frac = abs(f) - int(abs(f))
+    return frac
+
+def _to_decimal_tail(val: Union[float, str]) -> Optional[float]:
+    """
+    東京前提で 緯度:35.xxxxx 経度:139.xxxxx の小数部のみを使う。
+    例: 139.732787 -> 0.732787 / 35.687614 -> 0.687614
+    """
+    try:
+        f = float(val)
+    except Exception:
+        return None
+    frac = abs(f) - int(abs(f))
+    return frac
+
+def _round_for_5km(frac: Optional[float]) -> Optional[float]:
+    """5km程度で十分 → 小数第2位に丸め（約1.1km）。粗くしたければ round(frac, 1)。"""
+    if frac is None:
+        return None
+    return round(frac, 2)
+
+def build_geo_bbox_from_coords(coordinates_csv: str | Path) -> pd.DataFrame:
+    """
+    coordinates.csv を読み、（市区町村名, 大字_丁目名<丁目除去>）単位で
+    経度・緯度の小数部（139,35を除いた fractional）から
+    [x_min,x_max,y_min,y_max] を作る。
+    出力: columns = ['ward_city','city_town','x_min','x_max','y_min','y_max']
+    """
+    p = Path(coordinates_csv)
+    for enc in ("utf-8-sig", "utf-8", "cp932"):
+        try:
+            gdf = pd.read_csv(p, encoding=enc)
+            break
+        except Exception:
+            continue
+    else:
+        raise RuntimeError(f"failed to read {coordinates_csv}")
+
+    # 列名あわせ
+    # 市区町村名 → ward_city
+    # 大字_丁目名 → city_town（ただし末尾の「…丁目」を落とす）
+    if "市区町村名" not in gdf.columns or "大字_丁目名" not in gdf.columns:
+        raise ValueError("coordinates.csv に '市区町村名' と '大字_丁目名' が必要です。")
+
+    gdf["ward_city"] = gdf["市区町村名"].astype(str).str.strip()
+    gdf["city_town_raw"] = gdf["大字_丁目名"].astype(str).str.strip()
+    gdf["city_town"] = gdf["city_town_raw"].map(strip_chome)
+
+    # 緯度/経度の小数部。欠損時は X/Y 座標の fallback も可（今回は不要ならスキップ）
+    if "緯度" not in gdf.columns or "経度" not in gdf.columns:
+        raise ValueError("coordinates.csv に '緯度' と '経度' が必要です。")
+
+    gdf["x_frac"] = gdf["経度"].map(_to_decimal_tail).map(_round_for_5km)  # 経度→x
+    gdf["y_frac"] = gdf["緯度"].map(_to_decimal_tail).map(_round_for_5km)  # 緯度→y
+
+    # BBox（max-min）を作成
+    bbox = (
+        gdf.groupby(["ward_city", "city_town"], dropna=False)[["x_frac", "y_frac"]]
+          .agg(x_min=("x_frac", "min"),
+               x_max=("x_frac", "max"),
+               y_min=("y_frac", "min"),
+               y_max=("y_frac", "max"))
+          .reset_index()
+    )
+
+    return bbox[["ward_city","city_town","x_min","x_max","y_min","y_max"]]
+# === ここまで追記 =============================================================
