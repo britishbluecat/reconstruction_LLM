@@ -1,1 +1,8 @@
-https://suumo.jp/ms/chuko/tokyo/ek_12200/
+https://suumo.jp/ms/chuko/tokyo/sc_kokubunji/
+https://suumo.jp/ms/chuko/tokyo/sc_kokubunji/?page=2
+https://suumo.jp/ms/chuko/tokyo/sc_kokubunji/?page=3
+https://suumo.jp/ms/chuko/tokyo/sc_kokubunji/?page=4
+https://suumo.jp/ms/chuko/tokyo/sc_kokubunji/?page=5
+https://suumo.jp/ms/chuko/tokyo/sc_kokubunji/?page=6
+https://suumo.jp/ms/chuko/tokyo/sc_kokubunji/?page=7
+https://suumo.jp/ms/chuko/tokyo/sc_kokubunji/?page=8
