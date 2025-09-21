@@ -1,0 +1,18 @@
+python -m venv .venv
+pip install -r requirements.txt
+.venv\Scripts\activate.bat
+
+
+# そのまま（デフォルト値で実行）
+python src/advisor.py
+
+# JSON入力で実行
+python src/advisor.py sample_input.json
+
+
+cd C:\Users\user\Documents\python\reconstruction_LLM\src
+.venv\Scripts\activate.bat
+
+python -m pipeline_scrape_suumo url_list.txt
+python -m gini_importance
+python -m excel_gui_v2
